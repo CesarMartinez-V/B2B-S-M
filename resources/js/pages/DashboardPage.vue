@@ -1,6 +1,7 @@
 <script setup>
 import AppShell from '../components/portal/AppShell.vue';
 import { useModal } from '../composables/useModal.js';
+import { navigateTo } from '../composables/usePortalNavigation.js';
 import { useToast } from '../composables/useToast.js';
 
 const { openModal } = useModal();
@@ -48,7 +49,7 @@ const runAction = (label) => {
     const routes = { 'Historial': '/historial-facturas', 'Rastreo': '/pedidos', 'Cotizar': '/cotizaciones', 'Pedido': '/pedidos' };
 
     if (routes[label]) {
-        window.location.href = routes[label];
+        navigateTo(routes[label]);
         return;
     }
 

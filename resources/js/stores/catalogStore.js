@@ -4,9 +4,11 @@ import { formatCurrency, parseCurrency } from '../utils/currency.js';
 import { apiClient } from '../services/apiClient.js';
 
 const CACHE_TTL = 7 * 60 * 1000;
+const SESSION_KEY = 'portal.catalog.cache.v1';
+const MAX_SESSION_PAGES = 20;
 const products = reactive(catalogProducts.map((product) => normalizeProduct(product)));
 const filters = reactive({ categories: [], brands: [], min_price: 0, max_price: 10000, availability: ['all', 'available', 'unavailable'] });
-const meta = reactive({ current_page: 1, page: 1, per_page: 8, total: products.length, last_page: 1, source: 'mock-fallback' });
+const meta = reactive({ current_page: 1, page: 1, per_page: 24, total: products.length, last_page: 1, source: 'mock-fallback' });
 const state = reactive({ data: products, filters, meta, loading: false, filtersLoading: false, filtersWarming: false, error: null, filtersError: null, loaded: false, filtersLoaded: false, lastUpdated: 0, logs: [] });
 const pageCache = new Map();
 const inFlight = new Map();
@@ -48,6 +50,14 @@ const cacheKey = (params = {}) => JSON.stringify(Object.entries(params)
 
 const isFresh = (entry) => entry && Date.now() - entry.timestamp < CACHE_TTL;
 
+const safeSessionStorage = () => {
+    try {
+        return window.sessionStorage;
+    } catch {
+        return null;
+    }
+};
+
 const assignProducts = (items) => {
     products.splice(0, products.length, ...items.map(normalizeProduct));
 };
@@ -85,6 +95,50 @@ const applyCatalogResponse = (response) => {
     state.lastUpdated = Date.now();
 };
 
+const persistToSession = () => {
+    const storage = safeSessionStorage();
+    if (!storage) return;
+
+    const pages = [...pageCache.entries()]
+        .sort(([, left], [, right]) => right.timestamp - left.timestamp)
+        .slice(0, MAX_SESSION_PAGES);
+
+    try {
+        storage.setItem(SESSION_KEY, JSON.stringify({
+            pages,
+            filters: { ...filters },
+            filtersCache,
+            meta: { ...meta },
+            timestamp: Date.now(),
+        }));
+    } catch {
+        addLog('warn', 'catalog session persist skipped');
+    }
+};
+
+const hydrateFromSession = () => {
+    const storage = safeSessionStorage();
+    if (!storage) return;
+
+    try {
+        const cached = JSON.parse(storage.getItem(SESSION_KEY) || 'null');
+        if (!cached || Date.now() - Number(cached.timestamp || 0) > CACHE_TTL) return;
+
+        (cached.pages || []).forEach(([key, entry]) => {
+            if (isFresh(entry)) pageCache.set(key, entry);
+        });
+
+        assignFilters(cached.filters || {});
+        filtersCache = cached.filtersCache || (cached.filters ? { filters: cached.filters, timestamp: cached.timestamp } : null);
+        assignMeta(cached.meta || {});
+        state.loaded = pageCache.size > 0;
+        state.lastUpdated = cached.timestamp || 0;
+        addLog('info', 'catalog session hydrated', { pages: pageCache.size });
+    } catch {
+        addLog('warn', 'catalog session hydrate failed');
+    }
+};
+
 const requestCatalog = async (params, key) => {
     if (inFlight.has(key)) return inFlight.get(key);
 
@@ -94,6 +148,7 @@ const requestCatalog = async (params, key) => {
         .then((response) => {
             pageCache.set(key, { response, timestamp: Date.now() });
             addLog('info', 'products response', { source: response?.meta?.source, total: response?.meta?.total, products: response?.data?.products?.length ?? 0 });
+            persistToSession();
             return response;
         })
         .catch((error) => {
@@ -122,6 +177,7 @@ const fetchProducts = async (params = {}) => {
     try {
         const response = await requestCatalog(params, key);
         applyCatalogResponse(response);
+        persistToSession();
     } catch (error) {
         state.error = error;
     } finally {
@@ -153,6 +209,7 @@ const fetchFilters = async ({ force = false, cycle = 0 } = {}) => {
             assignFilters(nextFilters);
             filtersCache = { filters: nextFilters, timestamp: Date.now() };
             addLog('info', 'filters response', { categories: nextFilters.categories?.length ?? 0, brands: nextFilters.brands?.length ?? 0, warming: Boolean(nextFilters.warming) });
+            persistToSession();
 
             if (nextFilters.warming && cycle < 3) {
                 window.setTimeout(() => { void fetchFilters({ force: true, cycle: cycle + 1 }); }, 1200);
@@ -173,11 +230,55 @@ const fetchFilters = async ({ force = false, cycle = 0 } = {}) => {
     return filtersInFlight;
 };
 
+const getPage = (params = {}) => pageCache.get(cacheKey(params));
+
+const prefetchPage = async (params = {}) => {
+    const key = cacheKey(params);
+    const cached = pageCache.get(key);
+    if (isFresh(cached)) return cached.response;
+    return requestCatalog(params, key).catch(() => null);
+};
+
+const prefetchNeighbors = (currentPage = meta.current_page, params = {}) => {
+    const page = Number(currentPage) || 1;
+    const base = { per_page: meta.per_page || 24, include_filters: 0, ...params };
+    if (page > 1) void prefetchPage({ ...base, page: page - 1 });
+    if (page < Number(meta.last_page || 1)) void prefetchPage({ ...base, page: page + 1 });
+};
+
+const refreshInBackground = (params = {}) => {
+    void prefetchPage(params).then((response) => {
+        if (response) applyCatalogResponse(response);
+    });
+};
+
+const clearCatalogCache = () => {
+    pageCache.clear();
+    inFlight.clear();
+    filtersCache = null;
+    filtersInFlight = null;
+    state.loaded = false;
+    state.filtersLoaded = false;
+    state.lastUpdated = 0;
+    const storage = safeSessionStorage();
+    if (storage) storage.removeItem(SESSION_KEY);
+    addLog('info', 'catalog cache cleared');
+};
+
+hydrateFromSession();
+
 export const useCatalogStore = () => ({
     state,
     listProducts: () => products,
     fetchProducts,
     fetchFilters,
+    hydrateFromSession,
+    persistToSession,
+    clearCatalogCache,
+    getPage,
+    prefetchPage,
+    prefetchNeighbors,
+    refreshInBackground,
     addLog,
     filterProducts: ({ search = '', categories = [], brands = [], maxPrice = 10000, availability = 'all' } = {}) => {
         const term = search.trim().toLowerCase();

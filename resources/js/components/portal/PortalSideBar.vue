@@ -3,8 +3,10 @@ import { computed } from 'vue';
 import { useAuth } from '../../composables/useAuth.js';
 import { useConfirm } from '../../composables/useConfirm.js';
 import { useModal } from '../../composables/useModal.js';
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { useToast } from '../../composables/useToast.js';
 import { portalBrand, portalNavItems } from '../../portalNavigation.js';
+import { useCatalogStore } from '../../stores/catalogStore.js';
 
 const props = defineProps({
     activeRoute: { type: String, required: true },
@@ -23,7 +25,11 @@ const { openModal } = useModal();
 const { success } = useToast();
 
 const openQuoteModal = () => {
-    window.location.href = props.ctaHref;
+    navigateTo(props.ctaHref);
+};
+
+const handleNavigate = (href) => {
+    navigateTo(href);
 };
 
 const openSupportModal = () => {
@@ -46,8 +52,9 @@ const handleLogout = () => {
         tone: 'danger',
         onConfirm: () => {
             logout();
+            useCatalogStore().clearCatalogCache();
             success('Sesión temporal cerrada correctamente.');
-            window.location.href = props.logoutHref;
+            navigateTo(props.logoutHref);
         },
     });
 };
@@ -56,7 +63,7 @@ const handleLogout = () => {
 <template>
     <aside class="portal-sidebar">
         <div class="portal-sidebar-brand"><h2>{{ portalBrand.title }}</h2><p>{{ portalBrand.subtitle }}</p></div>
-        <nav><a v-for="item in navItems" :key="item.label" :class="{ active: item.active }" :href="item.href"><span class="material-symbols-outlined" :class="{ filled: item.active }">{{ item.icon }}</span><span>{{ item.label }}</span></a></nav>
+        <nav><a v-for="item in navItems" :key="item.label" :class="{ active: item.active }" :href="item.href" @click.prevent="handleNavigate(item.href)"><span class="material-symbols-outlined" :class="{ filled: item.active }">{{ item.icon }}</span><span>{{ item.label }}</span></a></nav>
         <a class="portal-new-quote" :href="ctaHref" @click.prevent="openQuoteModal"><span class="material-symbols-outlined">{{ ctaIcon }}</span>{{ ctaLabel }}</a>
         <footer><a :href="supportHref" @click.prevent="openSupportModal"><span class="material-symbols-outlined">support_agent</span>Soporte</a><a :href="logoutHref" @click.prevent="handleLogout"><span class="material-symbols-outlined">logout</span>Cerrar Sesión</a></footer>
     </aside>

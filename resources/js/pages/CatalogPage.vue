@@ -36,7 +36,7 @@ const availability = ref('all');
 const appliedFilters = ref({ search: '', categories: [], brands: [], maxPrice: 10000, availability: 'all' });
 const viewMode = ref('grid');
 const currentPage = ref(1);
-const itemsPerPage = 8;
+const itemsPerPage = 24;
 const showQuoteSummary = ref(false);
 const catalogState = catalogService.state;
 const lastSourceNotice = ref('');
@@ -88,6 +88,7 @@ const loadCatalog = async (page = currentPage.value) => {
     currentPage.value = page;
     await catalogService.fetchProducts(catalogParams(page));
     currentPage.value = Number(catalogState.meta.current_page) || page;
+    catalogService.prefetchNeighbors(currentPage.value, catalogParams(currentPage.value));
 };
 
 onMounted(() => {

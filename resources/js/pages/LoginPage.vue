@@ -2,6 +2,7 @@
 import { reactive } from 'vue';
 import { useAuth } from '../composables/useAuth.js';
 import { useModal } from '../composables/useModal.js';
+import { navigateTo } from '../composables/usePortalNavigation.js';
 import { useToast } from '../composables/useToast.js';
 import { PalabrasWeb } from '../PalabrasWeb.js';
 
@@ -48,7 +49,7 @@ const handleLogin = (mode = 'desktop') => {
 
     login({ username: values.username.trim(), password: values.password });
     success('Sesión temporal iniciada.');
-    window.location.href = '/panel';
+    navigateTo('/panel');
 };
 
 const openHelp = (type) => {

@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import AppModal from './components/ui/AppModal.vue';
 import AppToast from './components/ui/AppToast.vue';
 import ConfirmDialog from './components/ui/ConfirmDialog.vue';
 import { useAuth } from './composables/useAuth.js';
+import { navigateTo, usePortalNavigation } from './composables/usePortalNavigation.js';
 import { useTheme } from './composables/useTheme.js';
 import { PalabrasWeb } from './PalabrasWeb.js';
+import { usePortalPrefetchStore } from './stores/portalPrefetchStore.js';
 import BrandsPage from './pages/BrandsPage.vue';
 import CatalogPage from './pages/CatalogPage.vue';
 import AccountStatusPage from './pages/AccountStatusPage.vue';
@@ -17,9 +19,10 @@ import PortalPage from './pages/PortalPage.vue';
 import ProfilePage from './pages/ProfilePage.vue';
 import QuotesPage from './pages/QuotesPage.vue';
 
-const path = window.location.pathname.replace(/\/$/, '') || '/';
+const { currentPath } = usePortalNavigation();
 const { isAuthenticated } = useAuth();
 useTheme().initTheme();
+const portalPrefetch = usePortalPrefetchStore();
 
 const publicPages = {
     '/login': LoginPage,
@@ -44,14 +47,20 @@ const portalPages = {
     '/historial-facturas': 'accountStatus',
 };
 
-const currentPublicPage = computed(() => publicPages[path]);
-const currentPortalKey = computed(() => portalPages[path] || 'dashboard');
+const currentPublicPage = computed(() => publicPages[currentPath.value]);
+const currentPortalKey = computed(() => portalPages[currentPath.value] || 'dashboard');
 const currentPortalPage = computed(() => PalabrasWeb.pages[currentPortalKey.value]);
-const isBlocked = computed(() => path !== '/login' && !isAuthenticated.value);
+const isBlocked = computed(() => currentPath.value !== '/login' && !isAuthenticated.value);
 
 if (isBlocked.value) {
-    window.location.replace('/login');
+    navigateTo('/login', { replace: true });
 }
+
+watch([currentPath, isAuthenticated], ([pathValue, authenticated]) => {
+    if (pathValue !== '/login' && authenticated) {
+        portalPrefetch.run({ priorityPath: pathValue });
+    }
+}, { immediate: true });
 </script>
 
 <template>

@@ -1,5 +1,6 @@
 <script setup>
 import PortalLayout from '../layouts/PortalLayout.vue';
+import { navigateTo } from '../composables/usePortalNavigation.js';
 import { PalabrasWeb } from '../PalabrasWeb';
 
 defineProps({
@@ -51,7 +52,7 @@ const words = PalabrasWeb.portal;
                 <p class="eyebrow">{{ words.sections.actions }}</p>
                 <h2>{{ words.quickActionsTitle }}</h2>
                 <div class="quick-actions">
-                    <a v-for="action in words.quickActions" :key="action.label" :href="action.href">
+                    <a v-for="action in words.quickActions" :key="action.label" :href="action.href" @click.prevent="navigateTo(action.href)">
                         <span>{{ action.icon }}</span>
                         {{ action.label }}
                     </a>

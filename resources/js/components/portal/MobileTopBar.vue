@@ -1,4 +1,5 @@
 <script setup>
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { portalBrand, portalUser } from '../../portalNavigation.js';
 
 defineProps({
@@ -14,7 +15,7 @@ defineProps({
 <template>
     <header class="portal-mobile-top">
         <strong>{{ title }}</strong>
-        <div><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a v-if="showAvatar" :href="avatarHref"><img :src="avatarSrc" alt="Roberto Martínez"></a></div>
+        <div><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a v-if="showAvatar" :href="avatarHref" @click.prevent="navigateTo(avatarHref)"><img :src="avatarSrc" alt="Roberto Martínez"></a></div>
     </header>
 </template>
 

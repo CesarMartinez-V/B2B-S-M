@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted } from 'vue';
 import { useTheme } from '../../composables/useTheme.js';
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { portalBrand, portalUser } from '../../portalNavigation.js';
 
 defineProps({
@@ -24,7 +25,7 @@ onMounted(() => {
 <template>
     <header class="portal-topbar">
         <div><strong>{{ brandLabel }}</strong><label v-if="showSearch"><span class="material-symbols-outlined">search</span><input :placeholder="searchPlaceholder" type="text"></label></div>
-        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a class="portal-user-link" :href="userHref"><span>{{ userName }}</span><img :src="avatarSrc" :alt="userName"></a></nav>
+        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a class="portal-user-link" :href="userHref" @click.prevent="navigateTo(userHref)"><span>{{ userName }}</span><img :src="avatarSrc" :alt="userName"></a></nav>
     </header>
 </template>
 

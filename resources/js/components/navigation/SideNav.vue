@@ -1,4 +1,5 @@
 <script setup>
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { PalabrasWeb } from '../../PalabrasWeb';
 
 defineProps({
@@ -27,6 +28,7 @@ const words = PalabrasWeb.portal;
                 :key="item.key"
                 :class="{ active: item.key === activeKey }"
                 :href="item.href"
+                @click.prevent="navigateTo(item.href)"
             >
                 <span aria-hidden="true">{{ item.icon }}</span>
                 {{ item.label }}
@@ -34,9 +36,9 @@ const words = PalabrasWeb.portal;
         </nav>
 
         <div class="side-footer">
-            <a class="primary-link" :href="words.routes.quotes.href">{{ words.actions.newQuote }}</a>
-            <a :href="words.support.href">{{ words.support.label }}</a>
-            <a :href="words.logout.href">{{ words.logout.label }}</a>
+            <a class="primary-link" :href="words.routes.quotes.href" @click.prevent="navigateTo(words.routes.quotes.href)">{{ words.actions.newQuote }}</a>
+            <a :href="words.support.href" @click.prevent="navigateTo(words.support.href)">{{ words.support.label }}</a>
+            <a :href="words.logout.href" @click.prevent="navigateTo(words.logout.href)">{{ words.logout.label }}</a>
         </div>
     </aside>
 </template>

@@ -1,4 +1,5 @@
 <script setup>
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { PalabrasWeb } from '../../PalabrasWeb';
 
 const words = PalabrasWeb.portal;
@@ -6,7 +7,7 @@ const words = PalabrasWeb.portal;
 
 <template>
     <header class="top-bar glass-strip">
-        <a class="brand-wordmark" :href="words.routes.dashboard.href">{{ words.brandName }}</a>
+        <a class="brand-wordmark" :href="words.routes.dashboard.href" @click.prevent="navigateTo(words.routes.dashboard.href)">{{ words.brandName }}</a>
 
         <label class="top-search">
             <span aria-hidden="true">⌕</span>

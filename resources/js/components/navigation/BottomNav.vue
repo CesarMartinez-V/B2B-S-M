@@ -1,4 +1,5 @@
 <script setup>
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { PalabrasWeb } from '../../PalabrasWeb';
 
 defineProps({
@@ -18,6 +19,7 @@ const words = PalabrasWeb.portal;
             :key="item.key"
             :class="{ active: item.key === activeKey }"
             :href="item.href"
+            @click.prevent="navigateTo(item.href)"
         >
             <span aria-hidden="true">{{ item.icon }}</span>
             {{ item.shortLabel }}

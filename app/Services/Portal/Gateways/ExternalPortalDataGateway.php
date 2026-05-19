@@ -147,6 +147,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             'cookie_present' => $cookieHeader !== '',
             'xsrf_present' => $xsrfToken !== '',
         ];
+        $startedAt = microtime(true);
 
         try {
             $response = $this->erpRequest($endpoint, $query, $cookieHeader, $xsrfToken);
@@ -165,6 +166,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             $context = array_merge($context, [
                 'status' => $response->status(),
                 'content_type' => $contentType,
+                'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]);
 
             if (!$response->successful() || !str_contains($contentType, 'application/json')) {
@@ -179,6 +181,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
         } catch (\Throwable $exception) {
             Log::warning('Portal ERP request failed.', array_merge($context, [
                 'error' => $exception->getMessage(),
+                'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]));
 
             return null;

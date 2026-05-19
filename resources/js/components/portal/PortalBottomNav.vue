@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { portalBottomNavItems } from '../../portalNavigation.js';
 
 const props = defineProps({
@@ -11,7 +12,7 @@ const navItems = computed(() => props.items.map((item) => ({ ...item, active: it
 </script>
 
 <template>
-    <nav class="portal-bottom-nav"><a v-for="item in navItems" :key="item.label" :class="{ active: item.active }" :href="item.href"><span class="material-symbols-outlined" :class="{ filled: item.active }">{{ item.icon }}</span><small>{{ item.label }}</small></a></nav>
+    <nav class="portal-bottom-nav"><a v-for="item in navItems" :key="item.label" :class="{ active: item.active }" :href="item.href" @click.prevent="navigateTo(item.href)"><span class="material-symbols-outlined" :class="{ filled: item.active }">{{ item.icon }}</span><small>{{ item.label }}</small></a></nav>
 </template>
 
 <style scoped>

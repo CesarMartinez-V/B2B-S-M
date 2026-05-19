@@ -162,6 +162,79 @@ Si aparece `mock-fallback`, revisar `storage/logs/laravel.log`. Los logs deben m
 
 Los logs de login automatico muestran `login_attempt`, `login_success`, `cookie_present`, `xsrf_present` y `status`, pero nunca imprimen usuario, password, cookie ni token.
 
+## Estrategia de performance y cache del portal
+
+El portal usa navegacion SPA interna sin `vue-router` para evitar recargas completas entre pantallas. Los enlaces internos mantienen `href` por accesibilidad, pero interceptan el click con `history.pushState()` y un estado reactivo global. Esto evita perder los stores en memoria al ir, por ejemplo, de `/catalogo` a `/marcas` y volver.
+
+Rutas internas SPA:
+
+- `/panel`
+- `/catalogo`
+- `/marcas`
+- `/pedidos`
+- `/estado-de-cuenta`
+- `/historial-facturas`
+- `/cotizaciones`
+- `/perfil`
+
+El cache frontend sigue el patron stale-while-revalidate:
+
+- Si hay cache vigente, se muestra inmediatamente.
+- Si hay cache vencido, se muestra inmediatamente y se refresca en background.
+- Si no hay cache, se muestra skeleton/carga solo en la primera carga real.
+- Se usa `inFlight` por cache key para evitar requests duplicados.
+
+Stores actuales:
+
+- `resources/js/stores/catalogStore.js`: cache en memoria y `sessionStorage` solo para paginas recientes del catalogo.
+- `resources/js/stores/invoiceStore.js`: cache en memoria para historial de facturas.
+- `resources/js/stores/accountStore.js`: cache en memoria para resumen de estado de cuenta.
+- `resources/js/stores/profileStore.js`: cache en memoria de perfil con TTL mas largo.
+- `resources/js/stores/quoteStore.js`: cache en memoria para cotizaciones.
+- `resources/js/stores/orderStore.js`: cache en memoria para pedidos.
+- `resources/js/stores/portalPrefetchStore.js`: precarga silenciosa post-login/entrada al portal.
+
+`sessionStorage` se usa solo para catalogo y solo guarda paginas recientes, filtros, meta y timestamp. No se guardan cookies ERP, tokens, credenciales ni datos sensibles. Facturas, estado de cuenta, perfil, pedidos y cotizaciones usan cache en memoria por ahora. Al cerrar sesion temporal, se limpia el cache persistido del catalogo.
+
+Prefetch post-login o al entrar al shell:
+
+- Catalogo pagina 1 con `per_page=24`.
+- Filtros iniciales/progresivos del catalogo.
+- Historial de facturas pagina 1 y prefetch de pagina 2.
+- Estado de cuenta resumen.
+- Perfil.
+- Cotizaciones pagina 1.
+- Pedidos pagina 1.
+
+El prefetch no bloquea el render y limita concurrencia a 2 tareas para no saturar ERP. Si el usuario entra directo a `/catalogo`, el catalogo tiene prioridad.
+
+Catalogo:
+
+- No se cargan los 9,604 productos al frontend.
+- La pagina visible pide `per_page=24`.
+- La paginacion mantiene `meta.total` y `meta.last_page` reales desde ERP/cache.
+- Se hace prefetch silencioso de pagina anterior y siguiente.
+- El cache key incluye pagina, `per_page` y filtros activos.
+- Los filtros se enriquecen progresivamente con requests chicos y cacheados; no bloquean la grilla.
+
+Backend:
+
+- `ExternalPortalDataGateway` capea `per_page` hacia ERP a maximo `100`.
+- Si llega un valor mayor, se reduce y se loguea `Portal catalog per_page capped` sin datos sensibles.
+- No debe existir `per_page=10000` en el gateway.
+- Las respuestas ERP read-only se cachean con TTL corto y ultimo valor bueno.
+- Si ERP falla, se usa `external-cache` si existe o `mock-fallback` como ultima defensa.
+- Los logs incluyen `elapsed_ms`, `status`, `content_type`, `endpoint`, `source`, `cookie_present` y `xsrf_present`, pero no imprimen secretos.
+
+Como probar tiempos:
+
+- Abrir `/catalogo`; la primera carga puede depender del ERP, pero debe guardar cache.
+- Ir a `/marcas` y volver a `/catalogo`; debe renderizar casi instantaneo sin recargar la app.
+- Cambiar pagina 1 -> 2 -> 3 y volver a 1; las paginas cacheadas deben responder rapido.
+- Ir a una pagina lejana; debe pedir solo esa pagina.
+- Revisar consola por logs `[catalog]` y `[prefetch]`.
+- Revisar `storage/logs/laravel.log` y confirmar que no aparece `per_page=10000`.
+
 ## Rutas
 
 - `/`: redirige a `/login`.
