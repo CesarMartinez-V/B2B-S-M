@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Inversiones S&amp;M - Login Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary": "#001f2e",
+                        "surface-container-low": "#111828",
+                        "on-secondary-container": "#c0d8e8",
+                        "on-primary-fixed-variant": "#004d73",
+                        "secondary-fixed": "#c0d8e8",
+                        "inverse-primary": "#0a4c6e",
+                        "background": "#0a0e1a",
+                        "on-tertiary-fixed": "#1a002e",
+                        "on-secondary-fixed": "#0d1f2b",
+                        "on-primary-container": "#c8eaff",
+                        "tertiary-fixed": "#e8d0ff",
+                        "error-container": "#3d1414",
+                        "surface-variant": "#1a2438",
+                        "inverse-on-surface": "#0a0e1a",
+                        "surface-container": "#141c2e",
+                        "on-tertiary": "#1a002e",
+                        "surface-dim": "#0f1524",
+                        "outline": "#4a6070",
+                        "surface-container-highest": "#202c42",
+                        "primary-fixed": "#c8eaff",
+                        "primary": "#7dd3fc",
+                        "tertiary": "#c8a0f0",
+                        "secondary": "#88b4cc",
+                        "on-secondary": "#001f2e",
+                        "tertiary-fixed-dim": "#c8a0f0",
+                        "on-tertiary-container": "#e8d0ff",
+                        "secondary-container": "#1a3a4e",
+                        "inverse-surface": "#e0e8f0",
+                        "surface-tint": "#7dd3fc",
+                        "on-error": "#1a0000",
+                        "surface-container-high": "#1a2438",
+                        "on-surface": "#e0e8f0",
+                        "surface-bright": "#1a2438",
+                        "on-surface-variant": "#a0b4c4",
+                        "surface-container-lowest": "#0a0e1a",
+                        "on-error-container": "#ffb3b3",
+                        "tertiary-container": "#3d2060",
+                        "surface": "#0f1524",
+                        "outline-variant": "#2a3a48",
+                        "on-secondary-fixed-variant": "#2a4a5e",
+                        "on-background": "#e0e8f0",
+                        "on-primary-fixed": "#001f2e",
+                        "on-tertiary-fixed-variant": "#4d2a73",
+                        "primary-container": "#0e4d6e",
+                        "error": "#ff6b6b",
+                        "primary-fixed-dim": "#7dd3fc",
+                        "secondary-fixed-dim": "#88b4cc"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #0a0e1a; }
+        .glass-panel {
+            background: rgba(15, 21, 36, 0.45);
+            backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(125, 211, 252, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .liquid-glass {
+            background: linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(200, 160, 240, 0.05));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .input-glow:focus-within {
+            box-shadow: 0 0 15px rgba(125, 211, 252, 0.2);
+            border-color: rgba(125, 211, 252, 0.5);
+        }
+        .text-glow {
+            text-shadow: 0 0 12px rgba(125, 211, 252, 0.4);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center overflow-hidden">
+<!-- Cinematic Background Container -->
+<div class="fixed inset-0 z-0">
+<div class="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background/80 z-10"></div>
+<img alt="Cinematic Futuristic Electric Supercar" class="w-full h-full object-cover scale-105 filter brightness-75" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaL6XeMQStKTJxDlhCOjGqoGMwvJT6U1KfH5RE0KLzUiqi4qIhnVOeeRHqFrwsbtDKoAJFH63nfrWvb4eytdT3nNf6SloKX0zeFAt4r7ZtVT2-ktsOJqFM3rNTsZUIso1pJC6YoBoHDDQDbbS0grFC0ooc3S8ojz9pNkzJFvEyX1M2LeKKn5O_5Vmj2A5AUE1C1BngBkr5mV7CW0h9RnwRHGr0DyWDca4_71qt9AxzKTuyEttprRtaN1MRRVP-QZPr2AcIu84YYvY"/>
+<!-- Ambient Particles Overlay -->
+<div class="absolute inset-0 z-20 pointer-events-none overflow-hidden">
+<div class="absolute top-1/4 left-1/4 w-2 h-2 bg-primary/40 rounded-full blur-sm opacity-60"></div>
+<div class="absolute bottom-1/3 right-1/4 w-1.5 h-1.5 bg-tertiary/30 rounded-full blur-sm opacity-50"></div>
+<div class="absolute top-1/2 right-1/3 w-1 h-1 bg-white/20 rounded-full blur-[1px] opacity-40"></div>
+</div>
+</div>
+<!-- Main Content Canvas -->
+<main class="relative z-30 w-full max-w-md px-6">
+<!-- Branding Anchor -->
+<div class="mb-10 text-center">
+<h1 class="text-3xl font-black tracking-widest text-on-surface uppercase mb-2 text-glow">
+                Inversiones S&amp;M
+            </h1>
+<p class="text-on-surface-variant font-medium tracking-tight opacity-80">
+                Premium Automotive Logistics Portal
+            </p>
+</div>
+<!-- Floating Glass Login Panel -->
+<div class="glass-panel p-8 rounded-xl relative overflow-hidden group">
+<!-- Subtle Inner Glow Top -->
+<div class="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+<header class="mb-8">
+<h2 class="text-xl font-semibold text-on-surface mb-1">Acceso de Socios</h2>
+<div class="h-1 w-12 bg-primary rounded-full shadow-[0_0_10px_rgba(125,211,252,0.5)]"></div>
+</header>
+<form class="space-y-6">
+<!-- Username Input -->
+<div class="space-y-2">
+<label class="block text-xs font-bold text-on-surface-variant tracking-wider uppercase ml-1">Identificación</label>
+<div class="relative group/input flex items-center liquid-glass rounded-lg px-4 py-3.5 input-glow transition-all duration-300">
+<span class="material-symbols-outlined text-primary/60 mr-3 text-lg" data-icon="person">person</span>
+<input class="bg-transparent border-none p-0 w-full text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 text-sm font-medium" placeholder="Nombre de usuario" type="text"/>
+</div>
+</div>
+<!-- Password Input -->
+<div class="space-y-2">
+<div class="flex justify-between items-end ml-1">
+<label class="block text-xs font-bold text-on-surface-variant tracking-wider uppercase">Contraseña</label>
+<a class="text-[10px] text-primary hover:text-primary-fixed-dim transition-colors uppercase font-bold tracking-tighter" href="#">Olvido su clave?</a>
+</div>
+<div class="relative group/input flex items-center liquid-glass rounded-lg px-4 py-3.5 input-glow transition-all duration-300">
+<span class="material-symbols-outlined text-primary/60 mr-3 text-lg" data-icon="lock">lock</span>
+<input class="bg-transparent border-none p-0 w-full text-on-surface placeholder:text-on-surface-variant/40 focus:ring-0 text-sm font-medium" placeholder="••••••••" type="password"/>
+<span class="material-symbols-outlined text-on-surface-variant/50 cursor-pointer hover:text-on-surface transition-colors" data-icon="visibility">visibility</span>
+</div>
+</div>
+<!-- Remember Me -->
+<div class="flex items-center space-x-2 ml-1">
+<div class="relative w-4 h-4">
+<input class="peer appearance-none w-4 h-4 rounded border border-white/20 bg-white/5 checked:bg-primary transition-all" id="remember" type="checkbox"/>
+<span class="material-symbols-outlined absolute inset-0 text-[12px] text-on-primary hidden peer-checked:flex items-center justify-center pointer-events-none" data-icon="check">check</span>
+</div>
+<label class="text-xs text-on-surface-variant cursor-pointer select-none" for="remember">Recordar dispositivo por 30 días</label>
+</div>
+<!-- Premium CTA Button -->
+<button class="w-full relative group/btn overflow-hidden rounded-lg p-[1px] bg-gradient-to-r from-primary/50 via-tertiary/50 to-primary/50" type="submit">
+<div class="bg-primary-container/80 backdrop-blur-md px-6 py-4 rounded-[7px] flex items-center justify-center transition-all group-hover/btn:bg-primary-container group-active/btn:scale-[0.98]">
+<span class="text-primary font-bold tracking-widest uppercase text-sm drop-shadow-[0_0_8px_rgba(125,211,252,0.4)]">Entrar al Portal</span>
+<span class="material-symbols-outlined ml-2 text-primary group-hover/btn:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</button>
+</form>
+<!-- Secondary Actions -->
+<footer class="mt-8 pt-6 border-t border-white/5 text-center">
+<p class="text-xs text-on-surface-variant">
+                    ¿No tiene una cuenta? 
+                    <a class="text-primary font-bold hover:underline ml-1" href="#">Solicitar acceso B2B</a>
+</p>
+</footer>
+</div>
+<!-- Footer Utility Links -->
+<div class="mt-12 flex justify-between items-center px-4">
+<div class="flex space-x-6">
+<a class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-widest hover:text-on-surface transition-colors" href="#">Privacidad</a>
+<a class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-widest hover:text-on-surface transition-colors" href="#">Términos</a>
+</div>
+<div class="flex items-center space-x-2">
+<div class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+<span class="text-[10px] text-on-surface-variant/60 uppercase font-bold tracking-widest">Sistemas en línea</span>
+</div>
+</div>
+</main>
+<!-- Visual Decor Elements -->
+<div class="fixed bottom-10 right-10 z-40 md:block hidden">
+<div class="liquid-glass p-3 rounded-full flex flex-col items-center space-y-4">
+<button class="w-10 h-10 flex items-center justify-center text-primary/70 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="support_agent">support_agent</span>
+</button>
+<div class="h-px w-6 bg-white/10"></div>
+<button class="w-10 h-10 flex items-center justify-center text-primary/70 hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="language">language</span>
+</button>
+</div>
+</div>
+</body></html>

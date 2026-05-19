@@ -1,0 +1,17 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "node ./node_modules/vite/bin/vite.js build",
+        "dev": "node ./node_modules/vite/bin/vite.js"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^6.0.6",
+        "laravel-vite-plugin": "^3.1",
+        "vite": "^8.0.0"
+    },
+    "dependencies": {
+        "vue": "^3.5.34"
+    }
+}
