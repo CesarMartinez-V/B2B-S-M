@@ -108,31 +108,29 @@ No debe:
 - Duplicar reglas de negocio del sistema dueño de los datos.
 - Implementar autenticación real en esta fase.
 
-## Integracion ERP local y APIs B2B
+## Integracion Fastevo dev y APIs B2B
 
-Catalogo, panel principal, pedidos, cotizaciones, historial de facturas, estado de cuenta y perfil ya no consumen endpoints web protegidos del ERP. `ExternalPortalDataGateway` llama APIs B2B read-only de Fastevo, que no requieren cookie de sesion, XSRF ni login automatico.
+Catalogo, panel principal, pedidos, cotizaciones, historial de facturas, estado de cuenta y perfil no consumen endpoints web protegidos del ERP. `ExternalPortalDataGateway` llama APIs B2B read-only de Fastevo, que no requieren cookie de sesion, XSRF ni login automatico.
 
-Las credenciales/cookies ERP se mantienen solo para endpoints legacy que todavia dependan de rutas web protegidas en otros modulos.
+El navegador no llama Fastevo directamente. Vue consume solo `/api/portal/*`; Laravel Inversiones_S&M actua como bridge server-to-server hacia Fastevo, por lo que no hay dependencia de CORS entre el navegador y `dev.capgrupo.com`.
 
-Variables disponibles en `.env` del portal:
+La URL base y rutas B2B publicas de Fastevo estan centralizadas en `config/portal.php`, no en `.env`:
 
-```env
-ERP_BASE_URL=http://localhost:8001
-ERP_B2B_PRODUCTS_PATH=/api/portal-b2b/products
-ERP_B2B_INVOICES_PATH=/api/portal-b2b/invoices
-ERP_B2B_ACCOUNT_PATH=/api/portal-b2b/account
-ERP_B2B_PROFILE_PATH=/api/portal-b2b/profile
-ERP_B2B_DASHBOARD_PATH=/api/portal-b2b/dashboard
-ERP_B2B_ORDERS_PATH=/api/portal-b2b/orders
-ERP_B2B_QUOTES_PATH=/api/portal-b2b/quotes
-ERP_B2B_AUTH_IDENTITY_PATH=/api/portal-b2b/auth/identity
-ERP_B2B_CLIENT_ID=
-ERP_USERNAME=""
-ERP_PASSWORD=""
-ERP_LOGIN_URL=/login
-ERP_COOKIE=""
-ERP_XSRF_TOKEN=""
-ERP_TIMEOUT=15
+```php
+'fastevo' => [
+    'base_url' => 'https://dev.capgrupo.com',
+    'timeout' => 15,
+    'paths' => [
+        'auth_identity' => '/api/portal-b2b/auth/identity',
+        'products' => '/api/portal-b2b/products',
+        'invoices' => '/api/portal-b2b/invoices',
+        'account' => '/api/portal-b2b/account',
+        'profile' => '/api/portal-b2b/profile',
+        'dashboard' => '/api/portal-b2b/dashboard',
+        'orders' => '/api/portal-b2b/orders',
+        'quotes' => '/api/portal-b2b/quotes',
+    ],
+],
 ```
 
 ### Login B2B temporal por identidad/RTN
@@ -146,7 +144,6 @@ ERP_TIMEOUT=15
 - El frontend guarda solo el token temporal interno en `sessionStorage` bajo `portal-auth-session` y lo envia en el header `X-Portal-Session` en cada request `/api/portal/*`.
 - `ExternalPortalDataGateway` desencripta `X-Portal-Session`, extrae `fastevo_b2b_token` y llama Fastevo con `Authorization: Bearer <token>`. Vue sigue consumiendo solo `/api/portal/*`.
 - Inversiones_S&M ya no envia `client_id` por query a Fastevo. Esto evita IDOR porque Fastevo resuelve el cliente desde el token B2B.
-- `ERP_B2B_CLIENT_ID` queda solo como fallback local/dev para scoping de cache o entornos legacy; no es el flujo principal y no debe usarse en produccion.
 - Si Fastevo responde `401` o el token interno expira, el portal devuelve sesion expirada, limpia la sesion frontend y regresa a `/login`.
 - Al iniciar sesion con otro cliente o al cerrar sesion se limpian caches de perfil, cuenta, facturas, pedidos, cotizaciones, dashboard, catalogo, carrito temporal y prefetch.
 - Esta fase es temporal. Produccion debe agregar una segunda capa de seguridad: contrasena, OTP, correo, enlace firmado o autenticacion real del portal.
@@ -154,13 +151,12 @@ ERP_TIMEOUT=15
 
 Pruebas manuales del login temporal:
 
-- Fastevo directo: `POST http://localhost:8001/api/portal-b2b/auth/identity` con identidad/RTN existente.
+- Fastevo directo: `POST https://dev.capgrupo.com/api/portal-b2b/auth/identity` con identidad/RTN existente.
 - Fastevo directo: repetir con identidad inexistente y con formato con guiones.
 - Inversiones directo: `POST http://127.0.0.1:8000/api/portal/auth/identity` con identidad/RTN existente.
 - UI: entrar a `http://127.0.0.1:8000/login`, ingresar identidad o RTN y confirmar navegacion a `/panel`.
 - Despues del login validar `/api/portal/profile`, `/api/portal/account`, `/api/portal/invoices`, `/api/portal/dashboard`, `/api/portal/orders`, `/api/portal/quotes` y `/api/portal/catalog` usando el token B2B encapsulado.
 - Confirmar en Fastevo que las llamadas llegan con `Authorization: Bearer <token>` y sin `client_id` por query.
-- Confirmar que `ERP_B2B_CLIENT_ID` solo actua como fallback local/dev y no como flujo principal.
 
 Flujo actual de catalogo:
 
@@ -187,11 +183,13 @@ Optimizacion de paginacion y filtros:
 - El selector de anios de historial muestra solo anios reales devueltos por backend; no existe opcion visual `Todos los años`.
 - Para validar tiempos, comparar pagina 1 con filtros/resumen contra pagina 2 con flags en `0`:
 
+Estas pruebas deben enviarse con `Authorization: Bearer <token>` y sin `client_id` por query.
+
 ```txt
-/api/portal-b2b/invoices?client_id=57&page=1&per_page=20&include_filters=1
-/api/portal-b2b/invoices?client_id=57&page=2&per_page=20&include_filters=0
-/api/portal-b2b/account?client_id=57&page=1&per_page=20&include_summary=1&include_filters=1
-/api/portal-b2b/account?client_id=57&page=2&per_page=20&include_summary=0&include_filters=0
+/api/portal-b2b/invoices?page=1&per_page=20&include_filters=1
+/api/portal-b2b/invoices?page=2&per_page=20&include_filters=0
+/api/portal-b2b/account?page=1&per_page=20&include_summary=1&include_filters=1
+/api/portal-b2b/account?page=2&per_page=20&include_summary=0&include_filters=0
 ```
 
 Flujo actual de perfil:
@@ -220,10 +218,7 @@ Vue /api/portal/quotes -> ExternalPortalDataGateway::quotes() -> Fastevo /api/po
 
 Para catalogo:
 
-- No se usa `ERP_USERNAME`.
-- No se usa `ERP_PASSWORD`.
-- No se usa `ERP_COOKIE`.
-- No se usa `ERP_XSRF_TOKEN`.
+- No se usan credenciales, cookies ni XSRF del ERP legacy.
 - No se llama `/products/getProducts`.
 - Se conserva cache backend, last-known-good y `mock-fallback`.
 - Se conserva el limite `per_page <= 100`.
@@ -231,10 +226,7 @@ Para catalogo:
 
 Para panel principal, pedidos, cotizaciones, facturas, estado de cuenta y perfil:
 
-- No se usa `ERP_USERNAME`.
-- No se usa `ERP_PASSWORD`.
-- No se usa `ERP_COOKIE`.
-- No se usa `ERP_XSRF_TOKEN`.
+- No se usan credenciales, cookies ni XSRF del ERP legacy.
 - No se llama `/invoices/getInvoices`.
 - No se llama `/receivables/getReceivables`.
 - No se llama `/payments/getPayments`.
@@ -245,9 +237,8 @@ Para panel principal, pedidos, cotizaciones, facturas, estado de cuenta y perfil
 - No se llama `/guides/getGuides` como fuente principal de pedidos.
 - No se llama `/api/vendor-inventory/create-proforma`.
 - No se crean cotizaciones ni proformas reales desde el portal en esta fase.
-- `ERP_B2B_CLIENT_ID` es un identificador temporal de desarrollo para filtrar el cliente B2B.
-- Sin cliente configurado, Fastevo responde vacio de forma segura para no exponer dashboard, pedidos, cotizaciones, facturas, estado de cuenta ni perfiles globales.
-- En produccion, el cliente debe resolverse desde auth/token/session del portal, no desde un querystring publico.
+- Sin token B2B valido, Fastevo responde `401` y no expone dashboard, pedidos, cotizaciones, facturas, estado de cuenta ni perfiles globales.
+- En produccion, el cliente se resuelve desde auth/token/session del portal, no desde un querystring publico.
 - El perfil expone solo campos minimos seguros: contacto, empresa, codigo, correo, telefono, direccion, condicion comercial, credito y actividad reciente.
 - El panel principal expone solo perfil resumido, KPIs financieros, actividad reciente de facturas/pagos, grafico mensual agregado y acciones rapidas.
 - Pedidos usa `invoices` como fuente principal porque es la entidad con `client_id`; `guides`, `invoice_order_status`, `invoice_items` y `products` solo enriquecen el payload.
@@ -256,66 +247,9 @@ Para panel principal, pedidos, cotizaciones, facturas, estado de cuenta y perfil
 - Cotizaciones excluye costos, comisiones, proveedores, usuarios internos, acciones HTML y URLs administrativas.
 - El perfil excluye `created_by_id`, `user_id` interno, bancos, empleados, nomina, permisos, acciones HTML, URLs administrativas, passwords y tokens.
 
-Prioridad de autenticacion para endpoints ERP legacy:
-
-- Si `ERP_COOKIE` existe, el bridge usa esa cookie manual.
-- Si no existe `ERP_COOKIE` pero existen `ERP_USERNAME` y `ERP_PASSWORD`, el bridge intenta login automatico local contra `ERP_LOGIN_URL`.
-- Si ninguna opcion existe o falla, los modulos legacy caen a su fallback configurado.
-
-Modo automatico local:
-
-- Definir credenciales solo en `.env` local del portal:
-
-```env
-ERP_USERNAME="correo-o-usuario-local"
-ERP_PASSWORD="password-local"
-ERP_LOGIN_URL=/login
-```
-
-- Limpiar configuracion/cache:
-
-```bash
-php artisan config:clear
-php artisan cache:clear
-```
-
-- Probar:
-
-```txt
-http://127.0.0.1:8000/api/portal/catalog?page=1&per_page=8
-```
-
-El bridge hara `GET /login`, extraera CSRF/cookies iniciales, enviara `POST /login` con `email` o `username` y guardara temporalmente la cookie en cache para endpoints legacy. Catalogo no usa este flujo.
-
-Modo manual por cookie:
-
-- Entrar al ERP en `http://localhost:8001`.
-- Abrir DevTools > Application > Cookies.
-- Copiar `XSRF-TOKEN`.
-- Copiar la cookie de sesion disponible, normalmente `laravel_session` o `fastbi_session`.
-- Pegar en `.env` del portal sin commitear valores reales:
-
-```env
-ERP_COOKIE="XSRF-TOKEN=...; laravel_session=..."
-ERP_XSRF_TOKEN="..."
-```
-
-Despues de cambiar `.env`, ejecutar:
-
-```bash
-php artisan config:clear
-php artisan cache:clear
-```
-
-Probar:
-
-```txt
-http://127.0.0.1:8000/api/portal/catalog?page=1&per_page=8
-```
-
 Resultado esperado:
 
-- `meta.source = external` si ERP respondio directamente.
+- `meta.source = external` si Fastevo respondio directamente.
 - `meta.source = external-cache` si se uso cache read-only del bridge.
 - `meta.source = mock-fallback` si no hay respuesta B2B ni cache disponible.
 

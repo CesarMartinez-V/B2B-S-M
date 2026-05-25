@@ -50,7 +50,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
     {
         $scope = $this->portalB2BCacheScope();
         $clientConfigured = $scope !== '';
-        $cacheKey = 'portal.dashboard.'.sha1($this->erpBaseUrl().'|'.$this->b2bDashboardPath().'|'.$scope);
+        $cacheKey = 'portal.dashboard.'.sha1($this->fastevoUrl('dashboard').'|'.$scope);
         $lastCacheKey = $cacheKey.'.last';
 
         if (Cache::has($cacheKey)) {
@@ -59,7 +59,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return ['payload' => Cache::get($cacheKey), 'source' => 'external-cache'];
         }
 
-        $payload = $this->requestB2B($this->b2bDashboardPath());
+        $payload = $this->requestB2B('dashboard');
 
         if ($payload) {
             Cache::put($cacheKey, $payload, now()->addMinutes(self::DASHBOARD_CACHE_TTL_MINUTES));
@@ -143,8 +143,8 @@ class ExternalPortalDataGateway implements PortalDataGateway
 
     private function requestB2BCatalog(array $query = []): ?array
     {
-        $path = $this->b2bProductsPath();
-        $endpoint = $this->erpBaseUrl().$path;
+        $path = $this->fastevoPath('products');
+        $endpoint = $this->fastevoUrl('products');
         $startedAt = microtime(true);
         $context = [
             'endpoint' => $path,
@@ -154,7 +154,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
         ];
 
         try {
-            $response = Http::timeout((int) config('portal.erp_timeout', 15))
+            $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
                 ->acceptJson()
                 ->withHeaders($this->portalB2BAuthHeaders())
                 ->get($endpoint, array_filter($query, fn ($value): bool => $value !== null && $value !== ''));
@@ -186,11 +186,12 @@ class ExternalPortalDataGateway implements PortalDataGateway
         }
     }
 
-    private function requestB2B(string $path, array $query = []): ?array
+    private function requestB2B(string $pathKey, array $query = []): ?array
     {
         $hasB2BToken = $this->portalB2BToken() !== '';
 
-        $endpoint = $this->erpBaseUrl().$path;
+        $path = $this->fastevoPath($pathKey);
+        $endpoint = $this->fastevoUrl($pathKey);
         $startedAt = microtime(true);
         $context = [
             'endpoint' => $path,
@@ -201,7 +202,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
         ];
 
         try {
-            $response = Http::timeout((int) config('portal.erp_timeout', 15))
+            $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
                 ->acceptJson()
                 ->withHeaders($this->portalB2BAuthHeaders())
                 ->get($endpoint, array_filter($query, fn ($value): bool => $value !== null && $value !== ''));
@@ -266,7 +267,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
         $scope = $this->portalB2BCacheScope();
         $clientConfigured = $scope !== '';
         $query = array_filter($query, fn ($value): bool => $value !== null && $value !== '');
-        $cacheKey = 'portal.orders.'.sha1($this->erpBaseUrl().'|'.$this->b2bOrdersPath().'|'.$scope.'|'.json_encode($query));
+        $cacheKey = 'portal.orders.'.sha1($this->fastevoUrl('orders').'|'.$scope.'|'.json_encode($query));
         $lastCacheKey = $cacheKey.'.last';
 
         if (Cache::has($cacheKey)) {
@@ -275,7 +276,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return ['payload' => Cache::get($cacheKey), 'source' => 'external-cache'];
         }
 
-        $payload = $this->requestB2B($this->b2bOrdersPath(), $query);
+        $payload = $this->requestB2B('orders', $query);
 
         if ($payload) {
             Cache::put($cacheKey, $payload, now()->addMinutes(self::ORDERS_CACHE_TTL_MINUTES));
@@ -298,12 +299,13 @@ class ExternalPortalDataGateway implements PortalDataGateway
         return null;
     }
 
-    private function cachedB2BPayload(string $path, array $query, string $prefix, int $ttlMinutes): ?array
+    private function cachedB2BPayload(string $pathKey, array $query, string $prefix, int $ttlMinutes): ?array
     {
         $scope = $this->portalB2BCacheScope();
         $clientConfigured = $scope !== '';
         $query = array_filter($query, fn ($value): bool => $value !== null && $value !== '');
-        $cacheKey = $prefix.'.'.sha1($this->erpBaseUrl().'|'.$path.'|'.$scope.'|'.json_encode($query));
+        $path = $this->fastevoPath($pathKey);
+        $cacheKey = $prefix.'.'.sha1($this->fastevoUrl($pathKey).'|'.$scope.'|'.json_encode($query));
         $lastCacheKey = $cacheKey.'.last';
 
         if (Cache::has($cacheKey)) {
@@ -312,7 +314,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return ['payload' => Cache::get($cacheKey), 'source' => 'external-cache'];
         }
 
-        $payload = $this->requestB2B($path, $query);
+        $payload = $this->requestB2B($pathKey, $query);
 
         if ($payload) {
             Cache::put($cacheKey, $payload, now()->addMinutes($ttlMinutes));
@@ -351,7 +353,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             'include_summary' => $this->includeFlagValue($filters['include_summary'] ?? ($page === 1 ? 1 : 0)),
             'include_filters' => $this->includeFlagValue($filters['include_filters'] ?? ($page === 1 ? 1 : 0)),
         ];
-        $cached = $this->cachedB2BPayload($this->b2bAccountPath(), $query, 'portal.account', self::ACCOUNT_CACHE_TTL_MINUTES);
+        $cached = $this->cachedB2BPayload('account', $query, 'portal.account', self::ACCOUNT_CACHE_TTL_MINUTES);
 
         return $cached
             ? $this->withSource($this->normalizeB2BAccount($cached['payload']), $cached['source'])
@@ -371,7 +373,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             'year' => $this->activeFilterValue($filters['year'] ?? null, ['todos', 'all']),
             'include_filters' => $this->includeFlagValue($filters['include_filters'] ?? ($page === 1 ? 1 : 0)),
         ];
-        $cached = $this->cachedB2BPayload($this->b2bInvoicesPath(), $query, 'portal.invoices', self::INVOICES_CACHE_TTL_MINUTES);
+        $cached = $this->cachedB2BPayload('invoices', $query, 'portal.invoices', self::INVOICES_CACHE_TTL_MINUTES);
 
         return $cached ? $this->withSource($this->normalizeB2BInvoices($cached['payload']), $cached['source']) : $this->fallback->invoices($filters);
     }
@@ -403,7 +405,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
         $scope = $this->portalB2BCacheScope();
         $clientConfigured = $scope !== '';
         $query = array_filter($query, fn ($value): bool => $value !== null && $value !== '');
-        $cacheKey = 'portal.quotes.'.sha1($this->erpBaseUrl().'|'.$this->b2bQuotesPath().'|'.$scope.'|'.json_encode($query));
+        $cacheKey = 'portal.quotes.'.sha1($this->fastevoUrl('quotes').'|'.$scope.'|'.json_encode($query));
         $lastCacheKey = $cacheKey.'.last';
 
         if (Cache::has($cacheKey)) {
@@ -412,7 +414,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return ['payload' => Cache::get($cacheKey), 'source' => 'external-cache'];
         }
 
-        $payload = $this->requestB2B($this->b2bQuotesPath(), $query);
+        $payload = $this->requestB2B('quotes', $query);
 
         if ($payload) {
             Cache::put($cacheKey, $payload, now()->addMinutes(self::QUOTES_CACHE_TTL_MINUTES));
@@ -437,62 +439,9 @@ class ExternalPortalDataGateway implements PortalDataGateway
 
     public function profile(array $filters = []): array
     {
-        $payload = $this->requestB2B($this->b2bProfilePath());
+        $payload = $this->requestB2B('profile');
 
         return $payload ? $this->normalizeB2BProfile($payload) : $this->fallback->profile($filters);
-    }
-
-    private function requestExternal(string $path, array $query = []): ?array
-    {
-        $endpoint = $this->erpBaseUrl().$path;
-        $auth = $this->erpAuthHeaders();
-        $cookieHeader = $auth['cookie'];
-        $xsrfToken = $auth['xsrf'];
-        $context = [
-            'endpoint' => $path,
-            'url' => $endpoint,
-            'cookie_present' => $cookieHeader !== '',
-            'xsrf_present' => $xsrfToken !== '',
-        ];
-        $startedAt = microtime(true);
-
-        try {
-            $response = $this->erpRequest($endpoint, $query, $cookieHeader, $xsrfToken);
-
-            if ($response->status() === 401 && $this->canAutoLogin() && !$this->hasManualCookie()) {
-                $this->forgetCachedErpAuth();
-                $auth = $this->erpAuthHeaders(forceLogin: true);
-                $cookieHeader = $auth['cookie'];
-                $xsrfToken = $auth['xsrf'];
-                $context['cookie_present'] = $cookieHeader !== '';
-                $context['xsrf_present'] = $xsrfToken !== '';
-                $response = $this->erpRequest($endpoint, $query, $cookieHeader, $xsrfToken);
-            }
-
-            $contentType = (string) $response->header('Content-Type');
-            $context = array_merge($context, [
-                'status' => $response->status(),
-                'content_type' => $contentType,
-                'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
-            ]);
-
-            if (!$response->successful() || !str_contains($contentType, 'application/json')) {
-                Log::warning('Portal ERP request rejected.', $context);
-
-                return null;
-            }
-
-            Log::info('Portal ERP request succeeded.', $context);
-
-            return $response->json();
-        } catch (\Throwable $exception) {
-            Log::warning('Portal ERP request failed.', array_merge($context, [
-                'error' => $exception->getMessage(),
-                'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
-            ]));
-
-            return null;
-        }
     }
 
     private function portalB2BToken(): string
@@ -509,9 +458,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return 'session:'.sha1($token);
         }
 
-        $devClientId = trim((string) config('portal.erp_b2b_client_id', ''));
-
-        return $devClientId === '' ? '' : 'dev:'.sha1($devClientId);
+        return '';
     }
 
     private function portalB2BAuthHeaders(): array
@@ -577,231 +524,6 @@ class ExternalPortalDataGateway implements PortalDataGateway
             'message' => 'Sesion B2B expirada o invalida.',
             'meta' => ['source' => 'fastevo-public-b2b', 'session_expired' => true],
         ], 401));
-    }
-
-    private function erpRequest(string $endpoint, array $query, string $cookieHeader, string $xsrfToken)
-    {
-        return Http::timeout((int) config('portal.erp_timeout', 15))
-            ->acceptJson()
-            ->withHeaders(array_filter([
-                'X-Requested-With' => 'XMLHttpRequest',
-                'X-XSRF-TOKEN' => $xsrfToken,
-                'Cookie' => $cookieHeader,
-            ]))
-            ->get($endpoint, array_filter($query, fn ($value): bool => $value !== null && $value !== ''));
-    }
-
-    private function erpAuthHeaders(bool $forceLogin = false): array
-    {
-        $manualCookie = trim((string) config('portal.erp_cookie', ''));
-
-        if ($manualCookie !== '') {
-            return [
-                'cookie' => $manualCookie,
-                'xsrf' => trim((string) config('portal.erp_xsrf_token', '')),
-            ];
-        }
-
-        if ($this->canAutoLogin()) {
-            $auth = $this->cachedErpLogin($forceLogin);
-
-            if (($auth['cookie'] ?? '') !== '') {
-                return $auth;
-            }
-        }
-
-        return [
-            'cookie' => $this->requestCookieHeader(),
-            'xsrf' => (string) request()->cookies->get('XSRF-TOKEN', ''),
-        ];
-    }
-
-    private function cachedErpLogin(bool $force = false): array
-    {
-        $cacheKey = $this->erpAuthCacheKey();
-
-        if (!$force) {
-            $cached = Cache::get($cacheKey);
-
-            if (is_array($cached) && ($cached['cookie'] ?? '') !== '') {
-                return $cached;
-            }
-        }
-
-        $auth = $this->loginToErp();
-
-        if (($auth['cookie'] ?? '') !== '') {
-            Cache::put($cacheKey, $auth, now()->addMinutes(25));
-        }
-
-        return $auth;
-    }
-
-    private function loginToErp(): array
-    {
-        $loginPath = '/'.ltrim((string) config('portal.erp_login_url', '/login'), '/');
-        $loginUrl = $this->erpBaseUrl().$loginPath;
-        $timeout = (int) config('portal.erp_timeout', 15);
-
-        Log::info('Portal ERP login attempt.', ['login_attempt' => true]);
-
-        try {
-            $loginPage = Http::timeout($timeout)->get($loginUrl);
-            $initialCookie = $this->cookieHeaderFromResponse($loginPage);
-            $csrfToken = $this->csrfTokenFromHtml((string) $loginPage->body());
-            $xsrfToken = $this->cookieValue($initialCookie, 'XSRF-TOKEN') ?: $csrfToken;
-
-            foreach (['email', 'username'] as $field) {
-                $response = Http::timeout($timeout)
-                    ->acceptJson()
-                    ->asForm()
-                    ->withHeaders(array_filter([
-                        'X-Requested-With' => 'XMLHttpRequest',
-                        'X-CSRF-TOKEN' => $csrfToken,
-                        'X-XSRF-TOKEN' => $xsrfToken,
-                        'Cookie' => $initialCookie,
-                        'Referer' => $loginUrl,
-                    ]))
-                    ->post($loginUrl, array_filter([
-                        '_token' => $csrfToken,
-                        $field => (string) config('portal.erp_username', ''),
-                        'password' => (string) config('portal.erp_password', ''),
-                    ], fn ($value): bool => $value !== null && $value !== ''));
-
-                $cookieHeader = $this->mergeCookieHeaders($initialCookie, $this->cookieHeaderFromResponse($response));
-
-                $loginAccepted = $response->successful() || in_array($response->status(), [302, 303], true);
-
-                if ($loginAccepted) {
-                    if ($cookieHeader !== '') {
-                        Log::info('Portal ERP login finished.', [
-                            'login_success' => true,
-                            'status' => $response->status(),
-                            'cookie_present' => true,
-                            'xsrf_present' => $xsrfToken !== '',
-                        ]);
-
-                        return ['cookie' => $cookieHeader, 'xsrf' => $xsrfToken];
-                    }
-                }
-            }
-
-            Log::warning('Portal ERP login failed.', [
-                'login_success' => false,
-                'status' => $loginPage->status(),
-                'cookie_present' => $initialCookie !== '',
-                'xsrf_present' => $xsrfToken !== '',
-            ]);
-        } catch (\Throwable $exception) {
-            Log::warning('Portal ERP login exception.', [
-                'login_success' => false,
-                'error' => $exception->getMessage(),
-            ]);
-        }
-
-        return ['cookie' => '', 'xsrf' => ''];
-    }
-
-    private function canAutoLogin(): bool
-    {
-        return trim((string) config('portal.erp_username', '')) !== ''
-            && trim((string) config('portal.erp_password', '')) !== '';
-    }
-
-    private function hasManualCookie(): bool
-    {
-        return trim((string) config('portal.erp_cookie', '')) !== '';
-    }
-
-    private function forgetCachedErpAuth(): void
-    {
-        Cache::forget($this->erpAuthCacheKey());
-    }
-
-    private function erpAuthCacheKey(): string
-    {
-        return 'portal.erp.auth.'.sha1((string) config('portal.erp_base_url', '').'|'.(string) config('portal.erp_username', ''));
-    }
-
-    private function cookieHeaderFromResponse($response): string
-    {
-        $cookies = [];
-        $headers = $response->headers();
-        $setCookies = $headers['Set-Cookie'] ?? $headers['set-cookie'] ?? [];
-        $setCookies = is_array($setCookies) ? $setCookies : [$setCookies];
-
-        foreach ($setCookies as $cookie) {
-            $pair = trim(explode(';', (string) $cookie)[0] ?? '');
-
-            if ($pair !== '') {
-                $cookies[] = $pair;
-            }
-        }
-
-        return implode('; ', array_unique($cookies));
-    }
-
-    private function mergeCookieHeaders(string ...$headers): string
-    {
-        $cookies = [];
-
-        foreach ($headers as $header) {
-            foreach (array_filter(array_map('trim', explode(';', $header))) as $pair) {
-                $name = explode('=', $pair, 2)[0] ?? '';
-
-                if ($name !== '') {
-                    $cookies[$name] = $pair;
-                }
-            }
-        }
-
-        return implode('; ', array_values($cookies));
-    }
-
-    private function csrfTokenFromHtml(string $html): string
-    {
-        return preg_match('/<meta\s+name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']/i', $html, $matches)
-            ? (string) $matches[1]
-            : '';
-    }
-
-    private function cookieValue(string $cookieHeader, string $name): string
-    {
-        foreach (array_filter(array_map('trim', explode(';', $cookieHeader))) as $pair) {
-            [$cookieName, $value] = array_pad(explode('=', $pair, 2), 2, '');
-
-            if ($cookieName === $name) {
-                return urldecode($value);
-            }
-        }
-
-        return '';
-    }
-
-    private function erpCookieHeader(): string
-    {
-        return $this->erpAuthHeaders()['cookie'];
-    }
-
-    private function erpXsrfToken(): string
-    {
-        return $this->erpAuthHeaders()['xsrf'];
-    }
-
-    private function requestCookieHeader(): string
-    {
-        $cookies = request()->cookies;
-        $forward = [];
-
-        foreach (['fastbi_session', 'laravel_session', 'XSRF-TOKEN'] as $name) {
-            $value = $cookies->get($name);
-
-            if ($value) {
-                $forward[] = $name.'='.$value;
-            }
-        }
-
-        return implode('; ', $forward);
     }
 
     private function normalizeCatalog(array $payload, array $filters = [], string $source = 'external'): array
@@ -1048,54 +770,29 @@ class ExternalPortalDataGateway implements PortalDataGateway
         return $capped;
     }
 
-    private function erpBaseUrl(): string
+    private function fastevoBaseUrl(): string
     {
-        return rtrim((string) config('portal.erp_base_url', 'http://localhost:8001'), '/');
+        return rtrim((string) config('portal.fastevo.base_url'), '/');
     }
 
-    private function b2bProductsPath(): string
+    private function fastevoPath(string $key): string
     {
-        return '/'.ltrim((string) config('portal.erp_b2b_products_path', '/api/portal-b2b/products'), '/');
+        return '/'.ltrim((string) config('portal.fastevo.paths.'.$key), '/');
     }
 
-    private function b2bInvoicesPath(): string
+    private function fastevoUrl(string $key): string
     {
-        return '/'.ltrim((string) config('portal.erp_b2b_invoices_path', '/api/portal-b2b/invoices'), '/');
-    }
-
-    private function b2bAccountPath(): string
-    {
-        return '/'.ltrim((string) config('portal.erp_b2b_account_path', '/api/portal-b2b/account'), '/');
-    }
-
-    private function b2bProfilePath(): string
-    {
-        return '/'.ltrim((string) config('portal.erp_b2b_profile_path', '/api/portal-b2b/profile'), '/');
-    }
-
-    private function b2bDashboardPath(): string
-    {
-        return '/'.ltrim((string) config('portal.erp_b2b_dashboard_path', '/api/portal-b2b/dashboard'), '/');
-    }
-
-    private function b2bOrdersPath(): string
-    {
-        return '/'.ltrim((string) config('portal.erp_b2b_orders_path', '/api/portal-b2b/orders'), '/');
-    }
-
-    private function b2bQuotesPath(): string
-    {
-        return '/'.ltrim((string) config('portal.erp_b2b_quotes_path', '/api/portal-b2b/quotes'), '/');
+        return $this->fastevoBaseUrl().$this->fastevoPath($key);
     }
 
     private function b2bCatalogCacheScope(): string
     {
-        return sha1($this->erpBaseUrl().'|'.$this->b2bProductsPath());
+        return sha1($this->fastevoUrl('products'));
     }
 
     private function cacheScope(): string
     {
-        return sha1($this->erpCookieHeader() ?: 'anonymous');
+        return sha1($this->portalB2BCacheScope() ?: 'anonymous');
     }
 
     private function normalizeProduct(array $item): array
@@ -1371,6 +1068,6 @@ class ExternalPortalDataGateway implements PortalDataGateway
             return '';
         }
 
-        return str_starts_with($image, 'http') ? $image : $this->erpBaseUrl().'/'.ltrim($image, '/');
+        return str_starts_with($image, 'http') ? $image : $this->fastevoBaseUrl().'/'.ltrim($image, '/');
     }
 }

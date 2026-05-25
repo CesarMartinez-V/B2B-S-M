@@ -35,11 +35,11 @@ class PortalAuthController extends Controller
             return response()->json($this->authResponse(false));
         }
 
-        $path = '/'.ltrim((string) config('portal.erp_b2b_auth_identity_path', '/api/portal-b2b/auth/identity'), '/');
-        $endpoint = rtrim((string) config('portal.erp_base_url', 'http://localhost:8001'), '/').$path;
+        $endpoint = rtrim((string) config('portal.fastevo.base_url'), '/')
+            .'/'.ltrim((string) config('portal.fastevo.paths.auth_identity'), '/');
 
         try {
-            $response = Http::timeout((int) config('portal.erp_timeout', 15))
+            $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
                 ->acceptJson()
                 ->post($endpoint, ['identity' => $identityRaw]);
 
