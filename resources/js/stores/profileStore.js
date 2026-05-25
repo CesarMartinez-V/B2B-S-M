@@ -4,7 +4,7 @@ import { fetchProfile } from '../services/profileService.js';
 const TTL = 20 * 60 * 1000;
 let cache = null;
 let inFlight = null;
-const state = reactive({ loading: false, refreshing: false, error: null, lastUpdated: 0 });
+const state = reactive({ data: null, loading: false, refreshing: false, error: null, lastUpdated: 0 });
 
 const fetchProfileData = async (params = {}) => {
     if (cache && Date.now() - cache.timestamp < TTL) return cache.data;
@@ -17,6 +17,7 @@ const fetchProfileData = async (params = {}) => {
     inFlight = fetchProfile(params)
         .then((data) => {
             cache = { data, timestamp: Date.now() };
+            state.data = data;
             state.lastUpdated = Date.now();
             return data;
         })
@@ -33,4 +34,14 @@ const fetchProfileData = async (params = {}) => {
     return inFlight;
 };
 
-export const useProfileStore = () => ({ state, fetchProfile: fetchProfileData });
+const clearProfileCache = () => {
+    cache = null;
+    inFlight = null;
+    state.data = null;
+    state.loading = false;
+    state.refreshing = false;
+    state.error = null;
+    state.lastUpdated = 0;
+};
+
+export const useProfileStore = () => ({ state, fetchProfile: fetchProfileData, clearProfileCache });

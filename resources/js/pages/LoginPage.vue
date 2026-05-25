@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useAuth } from '../composables/useAuth.js';
 import { useModal } from '../composables/useModal.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
@@ -11,45 +11,54 @@ const backgroundImage = new URL('../../../stitch_inversiones_s_m_future_b2b_port
 const { login } = useAuth();
 const { openModal } = useModal();
 const { error, success } = useToast();
+const loading = ref(false);
 
 const form = reactive({
-    username: '',
-    password: '',
+    identity: '',
 });
 
 const mobileForm = reactive({
-    username: '',
-    password: '',
+    identity: '',
 });
 
 const errors = reactive({
-    username: '',
-    password: '',
-    mobileUsername: '',
-    mobilePassword: '',
+    identity: '',
+    mobileIdentity: '',
 });
 
 const validate = (values, mode = 'desktop') => {
-    const usernameKey = mode === 'mobile' ? 'mobileUsername' : 'username';
-    const passwordKey = mode === 'mobile' ? 'mobilePassword' : 'password';
+    const identityKey = mode === 'mobile' ? 'mobileIdentity' : 'identity';
 
-    errors[usernameKey] = values.username.trim() ? '' : 'Este campo es requerido.';
-    errors[passwordKey] = values.password.trim() ? '' : 'La contraseña es requerida.';
+    errors[identityKey] = values.identity.trim() ? '' : 'Ingresa tu número de identidad o RTN.';
 
-    return !errors[usernameKey] && !errors[passwordKey];
+    return !errors[identityKey];
 };
 
-const handleLogin = (mode = 'desktop') => {
+const handleLogin = async (mode = 'desktop') => {
     const values = mode === 'mobile' ? mobileForm : form;
 
     if (!validate(values, mode)) {
-        error('Completa usuario y contraseña para ingresar.');
+        error('Ingresa tu número de identidad o RTN para continuar.');
         return;
     }
 
-    login({ username: values.username.trim(), password: values.password });
-    success('Sesión temporal iniciada.');
-    navigateTo('/panel');
+    loading.value = true;
+
+    try {
+        const result = await login({ identity: values.identity.trim() });
+
+        if (!result.authenticated) {
+            error('No encontramos un cliente B2B con ese número de identidad o RTN.');
+            return;
+        }
+
+        success('Sesión temporal B2B iniciada.');
+        navigateTo('/panel');
+    } catch {
+        error('No se pudo validar la identidad en este momento.');
+    } finally {
+        loading.value = false;
+    }
 };
 
 const openHelp = (type) => {
@@ -57,13 +66,16 @@ const openHelp = (type) => {
         forgot: 'Ingresa tu correo corporativo y un asesor B2B validará el restablecimiento de acceso.',
         access: 'Tu solicitud de acceso quedará registrada para revisión comercial.',
         support: 'Soporte B2B registrará tu consulta de acceso y te contactará por los canales asociados a tu cuenta.',
+        privacy: 'La política de privacidad final debe conectarse al documento legal aprobado. Esta vista no almacena credenciales reales.',
+        terms: 'Los términos finales del portal B2B quedan pendientes de validación legal y comercial.',
         language: 'El portal mantiene idioma español para esta versión funcional.',
+        biometric: 'El acceso biométrico requiere integración con autenticación real. En esta fase usa ingreso temporal por identidad o RTN.',
     };
 
     openModal({
-        title: type === 'forgot' ? 'Recuperar contraseña' : type === 'access' ? 'Solicitar acceso' : type === 'language' ? 'Idioma del portal' : 'Soporte de acceso',
+        title: type === 'forgot' ? 'Recuperar contraseña' : type === 'access' ? 'Solicitar acceso' : type === 'language' ? 'Idioma del portal' : type === 'privacy' ? 'Privacidad' : type === 'terms' ? 'Términos' : type === 'biometric' ? 'Acceso biométrico' : 'Soporte de acceso',
         message: messages[type] || messages.support,
-        icon: type === 'language' ? 'language' : 'support_agent',
+        icon: type === 'language' ? 'language' : type === 'biometric' ? 'fingerprint' : 'support_agent',
         confirmText: 'Registrar',
         cancelText: 'Cerrar',
         onConfirm: () => success('Solicitud registrada correctamente.'),
@@ -103,23 +115,12 @@ const openHelp = (type) => {
                         <span>{{ words.desktop.fields.username.label }}</span>
                         <span class="desktop-input liquid-glass input-glow">
                             <span class="material-symbols-outlined">person</span>
-                            <input v-model="form.username" type="text" :placeholder="words.desktop.fields.username.placeholder" autocomplete="username">
+                            <input v-model="form.identity" type="text" :placeholder="words.desktop.fields.username.placeholder" autocomplete="off" inputmode="numeric">
                         </span>
-                        <small v-if="errors.username" class="login-error">{{ errors.username }}</small>
+                        <small v-if="errors.identity" class="login-error">{{ errors.identity }}</small>
                     </label>
 
-                    <label class="desktop-field">
-                        <span class="desktop-field-row">
-                            <span>{{ words.desktop.fields.password.label }}</span>
-                            <a href="#" @click.prevent="openHelp('forgot')">{{ words.desktop.forgotPassword }}</a>
-                        </span>
-                        <span class="desktop-input liquid-glass input-glow">
-                            <span class="material-symbols-outlined">lock</span>
-                            <input v-model="form.password" type="password" :placeholder="words.desktop.fields.password.placeholder" autocomplete="current-password">
-                            <span class="material-symbols-outlined muted-icon">visibility</span>
-                        </span>
-                        <small v-if="errors.password" class="login-error">{{ errors.password }}</small>
-                    </label>
+                    <p class="login-temp-note">Acceso temporal por identidad. En producción se agregará una validación adicional.</p>
 
                     <label class="desktop-remember">
                         <span class="checkbox-wrap">
@@ -129,9 +130,9 @@ const openHelp = (type) => {
                         <span>{{ words.desktop.remember }}</span>
                     </label>
 
-                    <button class="desktop-submit" type="submit">
+                    <button class="desktop-submit" type="submit" :disabled="loading">
                         <span class="submit-inner">
-                            <span>{{ words.desktop.submit }}</span>
+                            <span>{{ loading ? 'Validando...' : words.desktop.submit }}</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                         </span>
                     </button>
@@ -147,8 +148,8 @@ const openHelp = (type) => {
 
             <footer class="desktop-utility">
                 <nav>
-                    <a href="#" @click.prevent="openHelp('support')">{{ words.desktop.privacy }}</a>
-                    <a href="#" @click.prevent="openHelp('support')">{{ words.desktop.terms }}</a>
+                    <a href="#" @click.prevent="openHelp('privacy')">{{ words.desktop.privacy }}</a>
+                    <a href="#" @click.prevent="openHelp('terms')">{{ words.desktop.terms }}</a>
                 </nav>
                 <p>
                     <span></span>
@@ -177,30 +178,20 @@ const openHelp = (type) => {
                             <span>{{ words.mobile.fields.email.label }}</span>
                             <span class="mobile-input glass-input">
                                 <span class="material-symbols-outlined">person</span>
-                                <input v-model="mobileForm.username" type="email" :placeholder="words.mobile.fields.email.placeholder" autocomplete="email">
+                                <input v-model="mobileForm.identity" type="text" :placeholder="words.mobile.fields.email.placeholder" autocomplete="off" inputmode="numeric">
                             </span>
-                            <small v-if="errors.mobileUsername" class="login-error">{{ errors.mobileUsername }}</small>
+                            <small v-if="errors.mobileIdentity" class="login-error">{{ errors.mobileIdentity }}</small>
                         </label>
 
-                        <label class="mobile-field">
-                            <span class="mobile-field-row">
-                                <span>{{ words.mobile.fields.password.label }}</span>
-                                <a href="#" @click.prevent="openHelp('forgot')">{{ words.mobile.forgotPassword }}</a>
-                            </span>
-                            <span class="mobile-input glass-input">
-                                <span class="material-symbols-outlined">lock</span>
-                                <input v-model="mobileForm.password" type="password" :placeholder="words.mobile.fields.password.placeholder" autocomplete="current-password">
-                            </span>
-                            <small v-if="errors.mobilePassword" class="login-error">{{ errors.mobilePassword }}</small>
-                        </label>
+                        <p class="login-temp-note">Acceso temporal por identidad. En producción se agregará una validación adicional.</p>
 
                         <label class="mobile-remember">
                             <input id="remember-mobile" type="checkbox">
                             <span>{{ words.mobile.remember }}</span>
                         </label>
 
-                        <button class="mobile-submit" type="submit">
-                            <span>{{ words.mobile.submit }}</span>
+                        <button class="mobile-submit" type="submit" :disabled="loading">
+                            <span>{{ loading ? 'Validando...' : words.mobile.submit }}</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                             <span class="mobile-shimmer" aria-hidden="true"></span>
                         </button>
@@ -209,10 +200,10 @@ const openHelp = (type) => {
                     <div class="mobile-biometrics">
                         <p>{{ words.mobile.alternateAccess }}</p>
                         <div>
-                            <button type="button" class="glass-input" :aria-label="words.mobile.fingerprint">
+                            <button type="button" class="glass-input" :aria-label="words.mobile.fingerprint" @click="openHelp('biometric')">
                                 <span class="material-symbols-outlined">fingerprint</span>
                             </button>
-                            <button type="button" class="glass-input" :aria-label="words.mobile.face">
+                            <button type="button" class="glass-input" :aria-label="words.mobile.face" @click="openHelp('biometric')">
                                 <span class="material-symbols-outlined">face</span>
                             </button>
                         </div>
@@ -444,6 +435,14 @@ const openHelp = (type) => {
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.02em;
+}
+
+.login-temp-note {
+    margin: -6px 4px 0;
+    color: #8fa6b8;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
 }
 
 .desktop-field > span:first-child,

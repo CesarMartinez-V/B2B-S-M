@@ -3,17 +3,23 @@
 namespace App\Services\Portal;
 
 use App\Services\Portal\Contracts\PortalDataGateway;
+use App\Services\Portal\Gateways\ExternalPortalDataGateway;
 use App\Services\Portal\Gateways\MockPortalDataGateway;
 
 class PortalProfileService
 {
     public function __construct(private ?PortalDataGateway $gateway = null)
     {
-        $this->gateway ??= new MockPortalDataGateway();
+        $this->gateway ??= new ExternalPortalDataGateway(new MockPortalDataGateway());
     }
 
     public function get(array $filters = []): array
     {
-        return PortalResponse::make($this->gateway->profile($filters));
+        $payload = $this->gateway->profile($filters);
+        $source = (string) ($payload['_source'] ?? 'mock');
+        $externalMeta = is_array($payload['_meta'] ?? null) ? $payload['_meta'] : [];
+        unset($payload['_source'], $payload['_meta']);
+
+        return PortalResponse::make($payload, array_merge($externalMeta, ['source' => $source]));
     }
 }

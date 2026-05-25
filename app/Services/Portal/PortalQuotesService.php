@@ -3,18 +3,28 @@
 namespace App\Services\Portal;
 
 use App\Services\Portal\Contracts\PortalDataGateway;
+use App\Services\Portal\Gateways\ExternalPortalDataGateway;
 use App\Services\Portal\Gateways\MockPortalDataGateway;
 
 class PortalQuotesService
 {
     public function __construct(private ?PortalDataGateway $gateway = null)
     {
-        $this->gateway ??= new MockPortalDataGateway();
+        $this->gateway ??= new ExternalPortalDataGateway(new MockPortalDataGateway());
     }
 
     public function get(array $filters = []): array
     {
         $payload = $this->gateway->quotes($filters);
+        $source = (string) ($payload['_source'] ?? 'mock');
+        $externalMeta = is_array($payload['_meta'] ?? null) ? $payload['_meta'] : [];
+        unset($payload['_source']);
+        unset($payload['_meta']);
+
+        if (in_array($source, ['external', 'external-cache'], true) && $externalMeta !== []) {
+            return PortalResponse::make($payload, array_merge($externalMeta, ['source' => $source]));
+        }
+
         $search = mb_strtolower(trim((string) ($filters['search'] ?? '')));
         $status = trim((string) ($filters['status'] ?? ''));
         $archived = array_key_exists('archived', $filters) ? filter_var($filters['archived'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : null;
@@ -30,7 +40,7 @@ class PortalQuotesService
         [$items, $meta] = $this->paginate($quotes, (int) ($filters['page'] ?? 1), (int) ($filters['per_page'] ?? 15));
         $payload['quotes'] = $items;
 
-        return PortalResponse::make($payload, $meta);
+        return PortalResponse::make($payload, array_merge($meta, ['source' => $source]));
     }
 
     public function create(array $payload): array

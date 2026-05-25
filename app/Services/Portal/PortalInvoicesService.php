@@ -17,7 +17,14 @@ class PortalInvoicesService
     {
         $payload = $this->gateway->invoices($filters);
         $source = (string) ($payload['_source'] ?? 'mock');
+        $externalMeta = is_array($payload['_meta'] ?? null) ? $payload['_meta'] : [];
         unset($payload['_source']);
+        unset($payload['_meta']);
+
+        if (in_array($source, ['external', 'external-cache'], true) && $externalMeta !== []) {
+            return PortalResponse::make($payload, array_merge($externalMeta, ['source' => $source]));
+        }
+
         $query = mb_strtolower(trim((string) ($filters['query'] ?? '')));
         $status = (string) ($filters['status'] ?? 'Todos');
         $from = $filters['from'] ?? null;
@@ -37,7 +44,7 @@ class PortalInvoicesService
 
         [$items, $meta] = $this->paginate($invoices, (int) ($filters['page'] ?? 1), (int) ($filters['per_page'] ?? 15));
         $payload['invoices'] = $items;
-        $payload['statuses'] = array_values(array_unique(array_merge(['Todos'], array_column($this->gateway->invoices()['invoices'] ?? [], 'status'))));
+        $payload['statuses'] = array_values(array_unique(array_merge(['Todos'], array_column($payload['invoices'] ?? [], 'status'))));
 
         return PortalResponse::make($payload, array_merge($meta, ['source' => $source]));
     }

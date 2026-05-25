@@ -1,65 +1,70 @@
 <script setup>
+import { computed } from 'vue';
 import AppShell from '../components/portal/AppShell.vue';
-import { useModal } from '../composables/useModal.js';
+import { usePortalActions } from '../composables/usePortalActions.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
-import { useToast } from '../composables/useToast.js';
+import { getDashboardActivity, getDashboardChart, getDashboardClientConfigured, getDashboardKpis, getDashboardOverview, getDashboardProfile, getDashboardPromotions, getDashboardQuickActions } from '../services/dashboardService.js';
 
-const { openModal } = useModal();
-const { success } = useToast();
+const { openSupportModal, explainPendingIntegration, goToCatalog, goToQuotes, goToInvoices, goToOrders } = usePortalActions();
 
-const avatarDesktop = 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUZjQN_yRUnk-X6q5mojbJYGlpU8kPzI5W0uM3GM5nrtn6-BgUE-XSGyrwZwYlYJVeIMO2h_VaD2X_JfVoOnaQXkJAIlxR6Khqo8DQnPcvjcZyhydrO_zgRQCgcajdjfck8BjAwF0ZXOZ_TdB03zuFk_-rB4ypNlS8RjI-3TXhHYQcK2SqSmv20OhhAk4UiGDiWbochYpFnuMSCH1bIvgWfUu11tcrv7N4ry7xd7mYSrh7V0lGAU6hLiStVwi7r05YUOGCIxO_BM8';
-const avatarMobile = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDxRhaO_oE1xNRkDodqwuhi_3UGzE6Hx-Fl0_VFGfQDwzsy6fwjTdMbTGorxIUJTpyEdhrlSN2VdQwL3wT0QetF0MsE-8yKd_5tLZzr3xCuypzsUXsGFT9P6q7QD9MFbiSDY5JeWZtPzKJf9D9smfSa4qzMnTwBb7Eq1aWHKukOxptMd73KFHBTFCnU9OPdsXCOKFLj5edh8857aNVixftnD5_KuDz7nAFwaqH_Md75F4dKn0dPvGkPRW1IAW28N5DzFrYZXxKR9iM';
 const heroImage = new URL('../../../stitch_inversiones_s_m_future_b2b_portal/stitch_inversiones_s_m_future_b2b_portal/macro_shot_of_a_high_tech_automotive_engine_component_glowing_blue_fiber_optics/screen.png', import.meta.url).href;
 const promoImages = [
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDgXi9a2yg8HV_YL1Bjq2aGdcqoZTsU85OQ5tMLk9YVaK6Oy_Ae6kGBbGt5nXi1_Dv0PLnHNPexEpxV3frod-GCDz3BUKC5vtsX61JAsp87FasL3al--G7gRmmCMLfzFlSQu2rhnplTHe2YSjDmXoEkizVZ_iu5gGoj-8raNCJV2Kw0OTtiOGR5Ef2KN2KkQWMNyBtR8s_dUjeJBuK2GuSjna375vyaoOXchNG66WwFW2Lw9jFzdpENCTNM3rJNd88QYgc_z0gDm8I',
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDbAymn8CbivADNk1blzouw7I4IGinITq73dW68e3l36YDx8ziTVjl0gg1f8oS4SnmQTsJs1pqSLi_Aw9oW_82icNM2FAmFEp8EcngIIkxBAtgGppZ49z821x0m3ZbJUdjusABxECi5adKM6hdb_eJMDbX6pTkcRffwLEv5MXX_7x_7yroSwz5G1C1FlB1OmVH5ERcz1yt2S6HEpkltPXtZ249noIrestkci1oHLxaU8tWp6uYURcKYf_XOKPvT3LF7dKtsYvaWnSM',
 ];
 
-const activities = [
-    { icon: 'shopping_cart', tone: 'primary', title: 'Pedido #88241 Recibido', time: 'Hace 2m', text: 'Se ha procesado el pago para 15 kits de frenos cerámicos.', status: 'Procesado' },
-    { icon: 'description', tone: 'tertiary', title: 'Cotización Aprobada', time: 'Hace 4h', text: 'El cliente Taller Premium ha aceptado la oferta Q-0012.', status: 'Aprobado' },
-    { icon: 'priority_high', tone: 'error', title: 'Alerta de Inventario', time: 'Ayer', text: 'Stock crítico para transmisiones BMW Serie 3.', status: 'Acción Requerida' },
-];
+const profile = computed(() => getDashboardProfile());
+const overview = computed(() => getDashboardOverview());
+const kpis = computed(() => getDashboardKpis());
+const activities = computed(() => getDashboardActivity());
+const chart = computed(() => getDashboardChart());
+const quickActions = computed(() => getDashboardQuickActions());
+const promotions = computed(() => getDashboardPromotions());
+const clientConfigured = computed(() => getDashboardClientConfigured());
+const avatarDesktop = computed(() => profile.value.avatar);
+const avatarMobile = computed(() => profile.value.avatar);
+const displayName = computed(() => profile.value.name || profile.value.company || 'Cliente B2B');
+const companyName = computed(() => profile.value.company || 'Cliente B2B');
+const partnerLevel = computed(() => profile.value.partnerLevel || 'Socio B2B');
+const promotion = computed(() => promotions.value[0] ?? { title: 'Promociones disponibles', text: 'Contenido editorial temporal', tone: 'secondary' });
+const primaryKpi = computed(() => kpis.value[0] ?? { icon: 'account_balance_wallet', label: 'Deuda total', value: 'L. 0.00', meta: 'Sin saldo pendiente', tone: 'primary' });
+const secondaryKpi = computed(() => kpis.value[1] ?? { icon: 'speed', label: 'Crédito disponible', value: 'L. 0.00', meta: 'Crédito disponible', tone: 'tertiary' });
+const tertiaryKpi = computed(() => kpis.value[2] ?? { icon: 'receipt_long', label: 'Facturas vencidas', value: '0', meta: 'Sin vencidas', tone: 'success' });
+const mobileActions = computed(() => quickActions.value.slice(0, 4));
+const maxChartValue = computed(() => Math.max(...(chart.value.invoices ?? []), ...(chart.value.payments ?? []), 1));
+const chartBars = computed(() => (chart.value.months ?? []).map((label, index) => ({
+    label,
+    height: `${Math.max(12, Math.round(((chart.value.invoices?.[index] ?? 0) / maxChartValue.value) * 100))}%`,
+    tone: index % 2 ? 'tertiary' : 'primary',
+})));
 
-const quickActions = [
-    { icon: 'search_check', label: 'Buscar VIN' },
-    { icon: 'add_shopping_cart', label: 'Nuevo Pedido' },
-    { icon: 'history', label: 'Historial' },
-    { icon: 'map', label: 'Rastreo' },
-    { icon: 'download', label: 'Catálogo PDF' },
-    { icon: 'help_center', label: 'Tutoriales' },
-];
+const runAction = (action) => {
+    const label = typeof action === 'string' ? action : action.label;
+    const href = typeof action === 'object' ? action.href : null;
+    const routes = { Historial: goToInvoices, Facturas: goToInvoices, Catálogo: goToCatalog, Catalogo: goToCatalog, 'Nueva cotización': goToCatalog, 'Nueva cotizacion': goToCatalog, 'Estado de cuenta': () => navigateTo('/estado-de-cuenta'), Rastreo: goToOrders, Cotizar: goToQuotes, Pedido: goToOrders };
 
-const mobileActions = [
-    { icon: 'add_shopping_cart', label: 'Pedido' },
-    { icon: 'request_quote', label: 'Cotizar' },
-    { icon: 'barcode_scanner', label: 'Escanear' },
-    { icon: 'support_agent', label: 'Soporte' },
-];
-
-const chartBars = [
-    { label: 'BMW', height: '60%', tone: 'primary' },
-    { label: 'MB', height: '80%', tone: 'primary' },
-    { label: 'AUDI', height: '45%', tone: 'tertiary' },
-    { label: 'LEX', height: '35%', tone: 'primary' },
-    { label: 'PORS', height: '65%', tone: 'primary' },
-];
-
-const runAction = (label) => {
-    const routes = { 'Historial': '/historial-facturas', 'Rastreo': '/pedidos', 'Cotizar': '/cotizaciones', 'Pedido': '/pedidos' };
-
-    if (routes[label]) {
-        navigateTo(routes[label]);
+    if (href) {
+        navigateTo(href);
         return;
     }
 
-    openModal({ title: label, message: `Acción ${label} registrada localmente para seguimiento B2B.`, icon: 'bolt', confirmText: 'Registrar', cancelText: 'Cerrar', onConfirm: () => success(`${label} registrado correctamente.`) });
+    if (routes[label]) {
+        routes[label]();
+        return;
+    }
+
+    if (label === 'Soporte') {
+        openSupportModal({ reference: 'Panel principal', reason: 'Consulta general del portal B2B' });
+        return;
+    }
+
+    explainPendingIntegration(label);
 };
 </script>
 
 <template>
     <div class="dashboard-page">
-        <AppShell active-route="/panel" desktop-search-placeholder="Buscar socio, factura o pedido..." mobile-title="Inversiones S&amp;M" :avatar-src="avatarDesktop" :mobile-avatar-src="avatarMobile">
+        <AppShell active-route="/panel" desktop-search-placeholder="Buscar socio, factura o pedido..." mobile-title="Inversiones S&amp;M" :avatar-src="avatarDesktop" :mobile-avatar-src="avatarMobile" :user-name="displayName">
             <template #desktop>
             <main class="desktop-main shell-content">
                 <header class="hero-card glass-card">
@@ -70,13 +75,13 @@ const runAction = (label) => {
                     <div class="hero-content">
                         <div>
                             <h1>Panel Principal</h1>
-                            <p>Bienvenido de nuevo, Roberto. El rendimiento de su cuenta ha subido un 12% este mes.</p>
+                            <p>{{ clientConfigured ? `Bienvenido de nuevo, ${displayName}. Cuenta ${companyName} sincronizada con Fastevo.` : 'No hay cliente B2B configurado para esta sesión.' }}</p>
                         </div>
                         <div class="market-card glass-card">
                             <div><span class="material-symbols-outlined filled">trending_up</span></div>
                             <div>
-                                <span>Market Status</span>
-                                <strong>Bullish</strong>
+                                <span>{{ profile.code }}</span>
+                                <strong>{{ partnerLevel }}</strong>
                             </div>
                         </div>
                     </div>
@@ -85,32 +90,32 @@ const runAction = (label) => {
                 <section class="kpi-grid">
                     <article class="kpi-card elevated-card">
                         <div class="orb primary"></div>
-                        <div class="kpi-top"><div><span class="material-symbols-outlined">account_balance_wallet</span></div><em>+2.4%</em></div>
-                        <h3>Available Balance</h3>
-                        <p><strong>L. 142,850.00</strong><span>HNL</span></p>
+                        <div class="kpi-top"><div><span class="material-symbols-outlined">{{ primaryKpi.icon }}</span></div><em>{{ primaryKpi.meta }}</em></div>
+                        <h3>{{ primaryKpi.label }}</h3>
+                        <p><strong>{{ primaryKpi.value }}</strong><span>HNL</span></p>
                         <div class="progress"><i style="width: 66%"></i></div>
                     </article>
                     <article class="kpi-card elevated-card">
                         <div class="orb tertiary"></div>
-                        <div class="kpi-top"><div class="tertiary"><span class="material-symbols-outlined">receipt_long</span></div><em class="tertiary">12 New</em></div>
-                        <h3>Pending Invoices</h3>
-                        <p><strong>L. 24,115.50</strong></p>
-                        <div class="kpi-buttons"><button type="button" @click="runAction('Historial')">View All</button><button type="button" @click="runAction('Quick Pay')">Quick Pay</button></div>
+                        <div class="kpi-top"><div class="tertiary"><span class="material-symbols-outlined">{{ secondaryKpi.icon }}</span></div><em class="tertiary">{{ secondaryKpi.meta }}</em></div>
+                        <h3>{{ secondaryKpi.label }}</h3>
+                        <p><strong>{{ secondaryKpi.value }}</strong></p>
+                        <div class="kpi-buttons"><button type="button" @click="runAction('Estado de cuenta')">Ver cuenta</button><button type="button" @click="runAction('Historial')">Facturas</button></div>
                     </article>
                     <article class="kpi-card elevated-card">
                         <div class="orb secondary"></div>
-                        <div class="kpi-top"><div class="secondary"><span class="material-symbols-outlined">local_offer</span></div><div class="promo-stack"><img v-for="image in promoImages" :key="image" :src="image" alt="Premium automotive part"></div></div>
-                        <h3>Active Promotions</h3>
-                        <p><strong>15% OFF</strong></p>
-                        <small>Selected engine components and premium brake systems. Valid until end of month.</small>
+                        <div class="kpi-top"><div class="secondary"><span class="material-symbols-outlined">{{ tertiaryKpi.icon }}</span></div><div class="promo-stack"><img v-for="image in promoImages" :key="image" :src="image" alt="Premium automotive part"></div></div>
+                        <h3>{{ tertiaryKpi.label }}</h3>
+                        <p><strong>{{ tertiaryKpi.value }}</strong></p>
+                        <small>{{ tertiaryKpi.meta }} · {{ promotion.text }}</small>
                     </article>
                 </section>
 
                 <section class="desktop-lower-grid">
                     <article class="chart-card glass-card">
                         <div class="chart-head">
-                            <div><h3>Ventas por Marca</h3><p>Rendimiento trimestral detallado</p></div>
-                            <div class="period-tabs"><button type="button" @click="runAction('Week')">Week</button><button type="button" @click="runAction('Month')">Month</button><button type="button" @click="runAction('Year')">Year</button></div>
+                            <div><h3>Flujo mensual</h3><p>Facturas emitidas de los últimos meses</p></div>
+                            <div class="period-tabs"><button type="button" @click="runAction('Semana')">Semana</button><button type="button" @click="runAction('Mes')">Mes</button><button type="button" @click="runAction('Año')">Año</button></div>
                         </div>
                         <div class="chart-area">
                             <div class="chart-lines"><span></span><span></span><span></span><span></span></div>
@@ -119,9 +124,9 @@ const runAction = (label) => {
                     </article>
 
                     <article class="activity-card glass-card">
-                        <div class="activity-head"><h3>Actividad Reciente</h3><button class="material-symbols-outlined">filter_list</button></div>
+                        <div class="activity-head"><h3>Actividad Reciente</h3><button class="material-symbols-outlined" type="button" @click="runAction('Filtro de actividad')">filter_list</button></div>
                         <div class="activity-list">
-                            <div v-for="(activity, index) in activities" :key="activity.title" class="activity-item">
+                            <div v-for="(activity, index) in activities" :key="`${activity.title}-${activity.time}`" class="activity-item">
                                 <div class="activity-icon-wrap">
                                     <div :class="['activity-icon', activity.tone]"><span class="material-symbols-outlined">{{ activity.icon }}</span></div>
                                     <i v-if="index < activities.length - 1"></i>
@@ -132,6 +137,7 @@ const runAction = (label) => {
                                     <em :class="activity.tone">{{ activity.status }}</em>
                                 </div>
                             </div>
+                            <p v-if="!activities.length" class="empty-state">Sin actividad reciente para mostrar.</p>
                         </div>
                     </article>
                 </section>
@@ -139,7 +145,7 @@ const runAction = (label) => {
                 <section class="quick-section">
                     <h3>Accesos Rápidos</h3>
                     <div>
-                        <button v-for="action in quickActions" :key="action.label" class="quick-card glass-card" type="button" @click="runAction(action.label)">
+                        <button v-for="action in quickActions" :key="action.label" class="quick-card glass-card" type="button" @click="runAction(action)">
                             <span class="material-symbols-outlined">{{ action.icon }}</span>
                             <span>{{ action.label }}</span>
                         </button>
@@ -150,14 +156,14 @@ const runAction = (label) => {
             </template>
             <template #mobile>
             <main class="mobile-main">
-                <section class="welcome-mobile"><h1>Bienvenido, Roberto</h1><p>Estado de tu cuenta premium</p></section>
+                <section class="welcome-mobile"><h1>Bienvenido, {{ displayName }}</h1><p>{{ companyName }}</p></section>
                 <section class="mobile-kpis">
-                    <article class="mobile-kpi glass-card glow-cyan"><div><p>Total Pedidos</p><h2>L. 42,850</h2><span><i class="material-symbols-outlined">trending_up</i>+12.5% este mes</span></div><div class="mini-chart"><i></i><i></i><i></i><i></i></div></article>
-                    <article class="mobile-kpi glass-card glow-cyan"><div><p>En Tránsito</p><h2>18</h2><span>Llegada estimada: 2 días</span></div><span class="material-symbols-outlined filled tertiary-icon">local_shipping</span></article>
-                    <article class="mobile-kpi glass-card glow-cyan"><div><p>Crédito Disponible</p><h2>L. 15,000</h2><div class="mobile-credit"><i></i></div></div><span class="material-symbols-outlined wallet-icon">account_balance_wallet</span></article>
+                    <article class="mobile-kpi glass-card glow-cyan"><div><p>{{ primaryKpi.label }}</p><h2>{{ primaryKpi.value }}</h2><span><i class="material-symbols-outlined">trending_up</i>{{ primaryKpi.meta }}</span></div><div class="mini-chart"><i></i><i></i><i></i><i></i></div></article>
+                    <article class="mobile-kpi glass-card glow-cyan"><div><p>{{ tertiaryKpi.label }}</p><h2>{{ tertiaryKpi.value }}</h2><span>{{ tertiaryKpi.meta }}</span></div><span class="material-symbols-outlined filled tertiary-icon">{{ tertiaryKpi.icon }}</span></article>
+                    <article class="mobile-kpi glass-card glow-cyan"><div><p>{{ secondaryKpi.label }}</p><h2>{{ secondaryKpi.value }}</h2><div class="mobile-credit"><i></i></div></div><span class="material-symbols-outlined wallet-icon">{{ secondaryKpi.icon }}</span></article>
                 </section>
-                <section class="mobile-actions"><header><h3>Acciones Rápidas</h3><span>Ver Todo</span></header><div><button v-for="action in mobileActions" :key="action.label" type="button" @click="runAction(action.label)"><div class="glass-elevated"><span class="material-symbols-outlined">{{ action.icon }}</span></div><span>{{ action.label }}</span></button></div></section>
-                <section class="mobile-feed glass-elevated glow-cyan"><h3>Actividad Reciente</h3><div><article><span class="material-symbols-outlined">inventory_2</span><div><p>Pedido #SM-9023 Procesado</p><small>Repuestos de motor y frenos Brembo</small><em>Hace 2 horas</em></div></article><article><span class="material-symbols-outlined tertiary">payments</span><div><p>Pago Recibido</p><small>Transferencia bancaria por L. 1,200.00</small><em>Ayer, 14:30</em></div></article><article class="faded"><span class="material-symbols-outlined secondary">directions_car</span><div><p>Nuevo Catálogo Marcas</p><small>Actualización de componentes Tesla Gen 3</small><em>24 Oct</em></div></article></div></section>
+                <section class="mobile-actions"><header><h3>Acciones Rápidas</h3><span @click="runAction('Catálogo')">Ver Todo</span></header><div><button v-for="action in mobileActions" :key="action.label" type="button" @click="runAction(action)"><div class="glass-elevated"><span class="material-symbols-outlined">{{ action.icon }}</span></div><span>{{ action.label }}</span></button></div></section>
+                <section class="mobile-feed glass-elevated glow-cyan"><h3>Actividad Reciente</h3><div><article v-for="activity in activities.slice(0, 3)" :key="`${activity.title}-${activity.time}`"><span class="material-symbols-outlined">{{ activity.icon }}</span><div><p>{{ activity.title }}</p><small>{{ activity.text }}</small><em>{{ activity.time }}</em></div></article><p v-if="!activities.length" class="empty-state">Sin actividad reciente para mostrar.</p></div></section>
                 <div class="mobile-technical-bg"><div></div></div>
             </main>
             </template>

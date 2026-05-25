@@ -1,12 +1,12 @@
 import { reactive } from 'vue';
-import { fetchOrders } from '../services/orderService.js';
+import { dashboardState, fetchDashboard } from '../services/dashboardService.js';
 
-const TTL = 4 * 60 * 1000;
+const TTL = 2 * 60 * 1000;
 let cache = null;
 let inFlight = null;
 const state = reactive({ data: null, loading: false, refreshing: false, error: null, lastUpdated: 0 });
 
-const fetchPage = async (params = {}) => {
+const fetchSummary = async (params = {}) => {
     if (cache && Date.now() - cache.timestamp < TTL) return cache.data;
     if (inFlight) return inFlight;
 
@@ -14,8 +14,9 @@ const fetchPage = async (params = {}) => {
     state.refreshing = Boolean(cache);
     state.error = null;
 
-    inFlight = fetchOrders(params)
+    inFlight = fetchDashboard(params)
         .then((data) => {
+            if (dashboardState.error && cache) return cache.data;
             cache = { data, timestamp: Date.now() };
             state.data = data;
             state.lastUpdated = Date.now();
@@ -34,7 +35,7 @@ const fetchPage = async (params = {}) => {
     return inFlight;
 };
 
-const clearOrderCache = () => {
+const clearDashboardCache = () => {
     cache = null;
     inFlight = null;
     state.data = null;
@@ -44,4 +45,4 @@ const clearOrderCache = () => {
     state.lastUpdated = 0;
 };
 
-export const useOrderStore = () => ({ state, fetchPage, prefetchPage: fetchPage, clearOrderCache });
+export const useDashboardStore = () => ({ state, fetchSummary, clearDashboardCache });

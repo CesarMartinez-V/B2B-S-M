@@ -17,7 +17,16 @@ class PortalAccountService
     {
         $account = $this->gateway->account($filters);
         $source = (string) ($account['_source'] ?? 'mock');
+        $externalMeta = is_array($account['_meta'] ?? null) ? $account['_meta'] : [];
         unset($account['_source']);
+        unset($account['_meta']);
+
+        if (in_array($source, ['external', 'external-cache'], true) && $externalMeta !== []) {
+            $account['chart']['period'] = (string) ($filters['period'] ?? '');
+
+            return PortalResponse::make($account, array_merge($externalMeta, ['source' => $source]));
+        }
+
         $filter = (string) ($filters['filter'] ?? 'Todos');
         $period = (string) ($filters['period'] ?? '');
         $limit = max(1, (int) ($filters['limit'] ?? 3));

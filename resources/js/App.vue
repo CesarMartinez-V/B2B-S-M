@@ -52,11 +52,12 @@ const currentPortalKey = computed(() => portalPages[currentPath.value] || 'dashb
 const currentPortalPage = computed(() => PalabrasWeb.pages[currentPortalKey.value]);
 const isBlocked = computed(() => currentPath.value !== '/login' && !isAuthenticated.value);
 
-if (isBlocked.value) {
-    navigateTo('/login', { replace: true });
-}
-
 watch([currentPath, isAuthenticated], ([pathValue, authenticated]) => {
+    if (pathValue !== '/login' && !authenticated) {
+        navigateTo('/login', { replace: true });
+        return;
+    }
+
     if (pathValue !== '/login' && authenticated) {
         portalPrefetch.run({ priorityPath: pathValue });
     }

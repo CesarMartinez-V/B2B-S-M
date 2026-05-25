@@ -4,7 +4,7 @@ import { fetchQuotes } from '../services/quoteService.js';
 const TTL = 4 * 60 * 1000;
 const cache = new Map();
 const inFlight = new Map();
-const state = reactive({ loading: false, refreshing: false, error: null, lastUpdated: 0 });
+const state = reactive({ data: null, loading: false, refreshing: false, error: null, lastUpdated: 0 });
 const keyFor = (params = {}) => JSON.stringify(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)));
 const fresh = (entry) => entry && Date.now() - entry.timestamp < TTL;
 
@@ -21,6 +21,7 @@ const fetchPage = async (params = {}) => {
     const request = fetchQuotes(params)
         .then((data) => {
             cache.set(key, { data, timestamp: Date.now() });
+            state.data = data;
             state.lastUpdated = Date.now();
             return data;
         })
@@ -38,4 +39,14 @@ const fetchPage = async (params = {}) => {
     return request;
 };
 
-export const useQuoteStore = () => ({ state, fetchPage, prefetchPage: fetchPage });
+const clearQuoteCache = () => {
+    cache.clear();
+    inFlight.clear();
+    state.data = null;
+    state.loading = false;
+    state.refreshing = false;
+    state.error = null;
+    state.lastUpdated = 0;
+};
+
+export const useQuoteStore = () => ({ state, fetchPage, prefetchPage: fetchPage, clearQuoteCache });

@@ -3,12 +3,12 @@ export const PalabrasWeb = {
         brandName: 'Inversiones S&M',
         backgroundAlt: 'Cinematic Futuristic Electric Supercar',
         desktop: {
-            portalName: 'Premium Automotive Logistics Portal',
+            portalName: 'Portal logístico B2B',
             accessTitle: 'Acceso de Socios',
             fields: {
                 username: {
-                    label: 'Identificación',
-                    placeholder: 'Nombre de usuario',
+                    label: 'Número de identidad o RTN',
+                    placeholder: '0801-1999-00000',
                 },
                 password: {
                     label: 'Contraseña',
@@ -16,8 +16,8 @@ export const PalabrasWeb = {
                 },
             },
             remember: 'Recordar dispositivo por 30 días',
-            forgotPassword: 'Olvido su clave?',
-            submit: 'Entrar al Portal',
+            forgotPassword: '¿Olvidó su clave?',
+            submit: 'Ingresar al portal',
             helper: '¿No tiene una cuenta?',
             requestAccess: 'Solicitar acceso B2B',
             privacy: 'Privacidad',
@@ -27,13 +27,13 @@ export const PalabrasWeb = {
             language: 'Cambiar idioma',
         },
         mobile: {
-            portalName: 'Premium Automotive Parts • Portal B2B',
+            portalName: 'Repuestos automotrices premium • Portal B2B',
             accessTitle: 'Iniciar Sesión',
-            accessSubtitle: 'Accede a tu cuenta corporativa',
+            accessSubtitle: 'Accede temporalmente con tu identidad o RTN',
             fields: {
                 email: {
-                    label: 'Usuario / Email',
-                    placeholder: 'nombre@empresa.com',
+                    label: 'Número de identidad o RTN',
+                    placeholder: '0801-1999-00000',
                 },
                 password: {
                     label: 'Contraseña',
@@ -42,18 +42,18 @@ export const PalabrasWeb = {
             },
             remember: 'Mantener sesión iniciada',
             forgotPassword: '¿Olvidaste?',
-            submit: 'Ingresar al Portal',
+            submit: 'Ingresar al portal',
             alternateAccess: 'O accede con',
             helper: '¿No tienes una cuenta de distribuidor?',
             requestAccess: 'Solicitar Registro B2B',
-            security: ['Security', 'Encrypted', 'v2.4.0'],
+            security: ['Seguridad', 'Cifrado', 'v2.4.0'],
             fingerprint: 'Acceder con huella',
             face: 'Acceder con rostro',
         },
         fields: {
             email: {
-                label: 'Usuario / Email',
-                placeholder: 'nombre@empresa.com',
+                label: 'Número de identidad o RTN',
+                placeholder: '0801-1999-00000',
             },
             password: {
                 label: 'Contraseña',
@@ -76,13 +76,13 @@ export const PalabrasWeb = {
         remember: 'Mantener sesión iniciada',
         alternateAccess: 'O accede con',
         helper: '¿No tienes una cuenta de distribuidor?',
-        security: 'Security - Encrypted - v2.4.0',
+        security: 'Seguridad - Cifrado - v2.4.0',
         systemStatus: 'Sistemas en línea',
     },
     portal: {
         brandName: 'Inversiones S&M',
         portalName: 'Portal B2B',
-        portalTagline: 'Premium Automotive Parts',
+        portalTagline: 'Repuestos automotrices premium',
         navigationLabel: 'Navegación principal del portal',
         mobileNavigationLabel: 'Navegación móvil del portal',
         search: {
@@ -181,7 +181,7 @@ export const PalabrasWeb = {
             title: 'Nuestras Marcas',
             description: 'Presentación premium de fabricantes, categorías y beneficios comerciales para clientes B2B.',
             metrics: [
-                { label: 'Partners', value: '+120', detail: 'Fabricantes globales' },
+                { label: 'Aliados', value: '+120', detail: 'Fabricantes globales' },
                 { label: 'Garantía', value: '100%', detail: 'Producto original' },
                 { label: 'SKUs', value: '+50k', detail: 'Inventario directo' },
             ],

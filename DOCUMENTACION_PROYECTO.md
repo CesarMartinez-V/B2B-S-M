@@ -1,5 +1,33 @@
 # Memoria del proyecto
 
+## Fase funcional de botones y flujos B2B
+
+- Se centralizaron acciones seguras en `resources/js/composables/usePortalActions.js` para soporte, contacto con vendedor, documentos pendientes, navegacion interna, impresion segura y explicacion de integraciones ERP futuras.
+- El carrito de cotizacion temporal vive en `portal-quote-cart` mediante `quoteCartStore.js` y guarda solo datos necesarios del producto seleccionado: id, sku, nombre, marca, categoria, cantidad, disponibilidad y precio publico interno para calcular totales.
+- El carrito permite agregar, quitar, editar cantidad, vaciar, contar productos y calcular total. Si existe disponibilidad maxima, no permite superar esa cantidad.
+- El catalogo no muestra precios ni unidades, pero usa `priceValue` y `availableQty` internamente para preparar la solicitud.
+- En `/catalogo`, los botones `Cotizar` agregan productos disponibles al carrito temporal. El CTA flotante navega por SPA a `/cotizaciones` sin crear documentos reales.
+- En `/cotizaciones`, la cotizacion temporal se puede revisar, editar, vaciar y enviar como `Solicitud preparada` local. Esta accion no crea proforma, factura, cotizacion ni invoice real en Fastevo.
+- Las cotizaciones reales siguen llegando desde `GET /api/portal/quotes`. Las solicitudes temporales locales se guardan en `sm_quotes_temp` y se mezclan visualmente sin modificar ERP.
+- `Enviar solicitud` marca la solicitud local como preparada y muestra el mensaje: `La creacion real en ERP queda pendiente de aprobacion`.
+- Los botones de panel navegan a rutas reales cuando existe flujo read-only: catalogo, estado de cuenta, historial, pedidos y cotizaciones. Acciones de reportes/filtros futuros muestran modal de integracion ERP pendiente.
+- En pedidos, los documentos comerciales y guias no exponen `guide_url` ni rutas internas. Si no hay endpoint seguro, abren modal explicando que se requiere un endpoint seguro de documentos en Fastevo.
+- Estado de cuenta e historial exportan una impresion basica segura de la vista actual usando escape HTML en `usePdfExport.js`.
+- Perfil registra solicitudes locales de edicion, muestra seguridad visual y deja cambio de clave como integracion pendiente con auth real.
+- Marcas permite navegar al catalogo filtrando por marca cuando hay productos locales coincidentes; si no, muestra modal de disponibilidad.
+- Login mantiene sesion temporal, y privacidad, terminos, soporte, solicitar acceso, recuperar clave y biometria abren modales claros. No implementa auth real.
+- Ninguna accion de esta fase llama `vendor-inventory/create-proforma`, `create-proforma`, crea facturas reales, crea proformas reales ni modifica documentos reales en ERP.
+
+Pruebas manuales sugeridas:
+
+- Catalogo: agregar producto disponible, verificar contador, tocar `Cotizar`, llegar a `/cotizaciones`.
+- Cotizaciones: editar cantidad, quitar producto, vaciar, seguir cotizando y enviar solicitud temporal.
+- Pedidos: abrir detalle, intentar documentos, contactar soporte y ver mapa sin coordenadas.
+- Estado de cuenta: filtros, cargar mas, exportar PDF basico, ver comprobante y contactar vendedor.
+- Historial: buscar, filtrar, paginar, ver detalle, exportar y contactar vendedor.
+- Perfil: solicitar edicion, revisar seguridad y cambio de clave visual.
+- Login: recuperar clave, solicitar acceso, soporte, privacidad, terminos, biometria e ingreso temporal.
+
 ## Objetivo
 
 Proyecto B2B construido con Laravel y Vue. Laravel sirve la SPA y expone una API interna estable para Vue.
@@ -45,6 +73,7 @@ Vue services -> Laravel /api/portal/* -> PortalService -> PortalDataGateway -> M
 - `GET /api/portal/invoices`
 - `GET /api/portal/quotes`
 - `GET /api/portal/profile`
+- `POST /api/portal/auth/identity`
 - `POST /api/portal/quotes`
 - `POST /api/portal/support/contact`
 
@@ -79,14 +108,25 @@ No debe:
 - Duplicar reglas de negocio del sistema dueño de los datos.
 - Implementar autenticación real en esta fase.
 
-## Integracion ERP local por cookie de sesion o login dev
+## Integracion ERP local y APIs B2B
 
-Esta configuracion es solo para desarrollo local. Permite que el bridge Laravel consuma endpoints protegidos del ERP local sin hardcodear credenciales en el codigo. En produccion se debe usar una API key, service account formal o integracion server-to-server definida por el ERP.
+Catalogo, panel principal, pedidos, cotizaciones, historial de facturas, estado de cuenta y perfil ya no consumen endpoints web protegidos del ERP. `ExternalPortalDataGateway` llama APIs B2B read-only de Fastevo, que no requieren cookie de sesion, XSRF ni login automatico.
+
+Las credenciales/cookies ERP se mantienen solo para endpoints legacy que todavia dependan de rutas web protegidas en otros modulos.
 
 Variables disponibles en `.env` del portal:
 
 ```env
 ERP_BASE_URL=http://localhost:8001
+ERP_B2B_PRODUCTS_PATH=/api/portal-b2b/products
+ERP_B2B_INVOICES_PATH=/api/portal-b2b/invoices
+ERP_B2B_ACCOUNT_PATH=/api/portal-b2b/account
+ERP_B2B_PROFILE_PATH=/api/portal-b2b/profile
+ERP_B2B_DASHBOARD_PATH=/api/portal-b2b/dashboard
+ERP_B2B_ORDERS_PATH=/api/portal-b2b/orders
+ERP_B2B_QUOTES_PATH=/api/portal-b2b/quotes
+ERP_B2B_AUTH_IDENTITY_PATH=/api/portal-b2b/auth/identity
+ERP_B2B_CLIENT_ID=
 ERP_USERNAME=""
 ERP_PASSWORD=""
 ERP_LOGIN_URL=/login
@@ -95,11 +135,132 @@ ERP_XSRF_TOKEN=""
 ERP_TIMEOUT=15
 ```
 
-Prioridad de autenticacion:
+### Login B2B temporal por identidad/RTN
+
+- El login del portal pide `Numero de identidad o RTN` y envia el valor a `POST /api/portal/auth/identity`.
+- Inversiones_S&M no consulta tablas locales de clientes. Actua como bridge y llama a Fastevo `POST /api/portal-b2b/auth/identity`.
+- Fastevo valida contra `clients.vat_number`, normalizando el valor con `preg_replace('/\D+/', '', $identity)` para aceptar guiones, espacios, puntos y slash.
+- Si no existe cliente activo o hay mas de un cliente con el mismo `vat_number` normalizado, Fastevo responde `authenticated=false` y no devuelve lista ni datos sensibles.
+- Si existe exactamente un cliente valido, Fastevo devuelve `token`, `client.name`, `client.code` y `client.vatNumberMasked`. No devuelve `client_id` plano, `vat_number` completo, correo, telefono, direccion ni datos administrativos.
+- Inversiones_S&M crea un token temporal interno con `Crypt::encryptString(json_encode(...))` que encapsula `fastevo_b2b_token`, `client_name`, `client_code`, `issued_at` y `expires_at`.
+- El frontend guarda solo el token temporal interno en `sessionStorage` bajo `portal-auth-session` y lo envia en el header `X-Portal-Session` en cada request `/api/portal/*`.
+- `ExternalPortalDataGateway` desencripta `X-Portal-Session`, extrae `fastevo_b2b_token` y llama Fastevo con `Authorization: Bearer <token>`. Vue sigue consumiendo solo `/api/portal/*`.
+- Inversiones_S&M ya no envia `client_id` por query a Fastevo. Esto evita IDOR porque Fastevo resuelve el cliente desde el token B2B.
+- `ERP_B2B_CLIENT_ID` queda solo como fallback local/dev para scoping de cache o entornos legacy; no es el flujo principal y no debe usarse en produccion.
+- Si Fastevo responde `401` o el token interno expira, el portal devuelve sesion expirada, limpia la sesion frontend y regresa a `/login`.
+- Al iniciar sesion con otro cliente o al cerrar sesion se limpian caches de perfil, cuenta, facturas, pedidos, cotizaciones, dashboard, catalogo, carrito temporal y prefetch.
+- Esta fase es temporal. Produccion debe agregar una segunda capa de seguridad: contrasena, OTP, correo, enlace firmado o autenticacion real del portal.
+- Logs seguros: se permite `identity_present`, `identity_last4`, `token_valid`, `b2b_token_present`, `duplicate_detected` y tiempos. No se debe imprimir identidad completa, RTN completo, token ni `client_id` real.
+
+Pruebas manuales del login temporal:
+
+- Fastevo directo: `POST http://localhost:8001/api/portal-b2b/auth/identity` con identidad/RTN existente.
+- Fastevo directo: repetir con identidad inexistente y con formato con guiones.
+- Inversiones directo: `POST http://127.0.0.1:8000/api/portal/auth/identity` con identidad/RTN existente.
+- UI: entrar a `http://127.0.0.1:8000/login`, ingresar identidad o RTN y confirmar navegacion a `/panel`.
+- Despues del login validar `/api/portal/profile`, `/api/portal/account`, `/api/portal/invoices`, `/api/portal/dashboard`, `/api/portal/orders`, `/api/portal/quotes` y `/api/portal/catalog` usando el token B2B encapsulado.
+- Confirmar en Fastevo que las llamadas llegan con `Authorization: Bearer <token>` y sin `client_id` por query.
+- Confirmar que `ERP_B2B_CLIENT_ID` solo actua como fallback local/dev y no como flujo principal.
+
+Flujo actual de catalogo:
+
+```txt
+Vue /api/portal/catalog -> ExternalPortalDataGateway::catalog() -> Fastevo /api/portal-b2b/products -> cache/fallback del portal
+```
+
+Flujos actuales de facturas y estado de cuenta:
+
+```txt
+Vue /api/portal/invoices -> ExternalPortalDataGateway::invoices() -> Fastevo /api/portal-b2b/invoices -> fallback del portal
+Vue /api/portal/account -> ExternalPortalDataGateway::account() -> Fastevo /api/portal-b2b/account -> fallback del portal
+```
+
+Optimizacion de paginacion y filtros:
+
+- `GET /api/portal-b2b/invoices` acepta `include_filters=1|0`.
+- Primera carga de historial usa `include_filters=1` para traer filtros dinamicos de estados, anios, rango de fechas y tipos de documento.
+- Cambios de pagina del historial usan `include_filters=0` cuando los filtros ya estan en cache del frontend para evitar recalcular agregados.
+- `GET /api/portal-b2b/account` acepta `include_summary=1|0` e `include_filters=1|0`.
+- Primera carga de estado de cuenta usa `include_summary=1&include_filters=1`.
+- `Cargar 20 mas` usa `include_summary=0&include_filters=0` para pedir solo la pagina de movimientos.
+- Los filtros/resumenes se cachean en Fastevo por cliente con TTL corto, sin imprimir `client_id` real en logs.
+- El selector de anios de historial muestra solo anios reales devueltos por backend; no existe opcion visual `Todos los años`.
+- Para validar tiempos, comparar pagina 1 con filtros/resumen contra pagina 2 con flags en `0`:
+
+```txt
+/api/portal-b2b/invoices?client_id=57&page=1&per_page=20&include_filters=1
+/api/portal-b2b/invoices?client_id=57&page=2&per_page=20&include_filters=0
+/api/portal-b2b/account?client_id=57&page=1&per_page=20&include_summary=1&include_filters=1
+/api/portal-b2b/account?client_id=57&page=2&per_page=20&include_summary=0&include_filters=0
+```
+
+Flujo actual de perfil:
+
+```txt
+Vue /api/portal/profile -> ExternalPortalDataGateway::profile() -> Fastevo /api/portal-b2b/profile -> fallback del portal
+```
+
+Flujo actual de panel principal:
+
+```txt
+Vue /api/portal/dashboard -> ExternalPortalDataGateway::dashboard() -> Fastevo /api/portal-b2b/dashboard -> cache/fallback del portal
+```
+
+Flujo actual de pedidos:
+
+```txt
+Vue /api/portal/orders -> ExternalPortalDataGateway::orders() -> Fastevo /api/portal-b2b/orders -> cache/fallback del portal
+```
+
+Flujo actual de cotizaciones:
+
+```txt
+Vue /api/portal/quotes -> ExternalPortalDataGateway::quotes() -> Fastevo /api/portal-b2b/quotes -> cache/fallback del portal
+```
+
+Para catalogo:
+
+- No se usa `ERP_USERNAME`.
+- No se usa `ERP_PASSWORD`.
+- No se usa `ERP_COOKIE`.
+- No se usa `ERP_XSRF_TOKEN`.
+- No se llama `/products/getProducts`.
+- Se conserva cache backend, last-known-good y `mock-fallback`.
+- Se conserva el limite `per_page <= 100`.
+- Los logs incluyen `endpoint`, `status`, `content_type`, `elapsed_ms`, `source` y `b2b_catalog_endpoint: true`.
+
+Para panel principal, pedidos, cotizaciones, facturas, estado de cuenta y perfil:
+
+- No se usa `ERP_USERNAME`.
+- No se usa `ERP_PASSWORD`.
+- No se usa `ERP_COOKIE`.
+- No se usa `ERP_XSRF_TOKEN`.
+- No se llama `/invoices/getInvoices`.
+- No se llama `/receivables/getReceivables`.
+- No se llama `/payments/getPayments`.
+- No se llama `/clients/getClients`.
+- No se llama `/purchase_orders/getPurchaseOrders`.
+- No se llama `/orders/getOrders`.
+- No se llama `/order_invoices/getOrderInvoices`.
+- No se llama `/guides/getGuides` como fuente principal de pedidos.
+- No se llama `/api/vendor-inventory/create-proforma`.
+- No se crean cotizaciones ni proformas reales desde el portal en esta fase.
+- `ERP_B2B_CLIENT_ID` es un identificador temporal de desarrollo para filtrar el cliente B2B.
+- Sin cliente configurado, Fastevo responde vacio de forma segura para no exponer dashboard, pedidos, cotizaciones, facturas, estado de cuenta ni perfiles globales.
+- En produccion, el cliente debe resolverse desde auth/token/session del portal, no desde un querystring publico.
+- El perfil expone solo campos minimos seguros: contacto, empresa, codigo, correo, telefono, direccion, condicion comercial, credito y actividad reciente.
+- El panel principal expone solo perfil resumido, KPIs financieros, actividad reciente de facturas/pagos, grafico mensual agregado y acciones rapidas.
+- Pedidos usa `invoices` como fuente principal porque es la entidad con `client_id`; `guides`, `invoice_order_status`, `invoice_items` y `products` solo enriquecen el payload.
+- Pedidos no expone `guide_url` directa; solo `guideUrlAvailable` hasta tener endpoint seguro de documentos.
+- Cotizaciones usa `invoices` con `invoice_type_id=2` como fuente principal y `invoice_items`/`products` solo para items publicos.
+- Cotizaciones excluye costos, comisiones, proveedores, usuarios internos, acciones HTML y URLs administrativas.
+- El perfil excluye `created_by_id`, `user_id` interno, bancos, empleados, nomina, permisos, acciones HTML, URLs administrativas, passwords y tokens.
+
+Prioridad de autenticacion para endpoints ERP legacy:
 
 - Si `ERP_COOKIE` existe, el bridge usa esa cookie manual.
 - Si no existe `ERP_COOKIE` pero existen `ERP_USERNAME` y `ERP_PASSWORD`, el bridge intenta login automatico local contra `ERP_LOGIN_URL`.
-- Si ninguna opcion existe o falla, cae a `mock-fallback` sin romper el catalogo.
+- Si ninguna opcion existe o falla, los modulos legacy caen a su fallback configurado.
 
 Modo automatico local:
 
@@ -124,7 +285,7 @@ php artisan cache:clear
 http://127.0.0.1:8000/api/portal/catalog?page=1&per_page=8
 ```
 
-El bridge hara `GET /login`, extraera CSRF/cookies iniciales, enviara `POST /login` con `email` o `username`, guardara temporalmente la cookie en cache y luego consumira `/products/getProducts`.
+El bridge hara `GET /login`, extraera CSRF/cookies iniciales, enviara `POST /login` con `email` o `username` y guardara temporalmente la cookie en cache para endpoints legacy. Catalogo no usa este flujo.
 
 Modo manual por cookie:
 
@@ -156,9 +317,9 @@ Resultado esperado:
 
 - `meta.source = external` si ERP respondio directamente.
 - `meta.source = external-cache` si se uso cache read-only del bridge.
-- `meta.source = mock-fallback` si no hay sesion valida ni cache disponible.
+- `meta.source = mock-fallback` si no hay respuesta B2B ni cache disponible.
 
-Si aparece `mock-fallback`, revisar `storage/logs/laravel.log`. Los logs deben mostrar `cookie_present`, `xsrf_present`, `status`, `content_type` y `endpoint`, pero nunca imprimen el valor real de la cookie ni del token. Si el ERP devuelve `401`, renovar la cookie desde DevTools y limpiar config/cache de Laravel.
+Si aparece `mock-fallback` en catalogo, revisar `storage/logs/laravel.log`. Los logs del catalogo B2B deben mostrar `b2b_catalog_endpoint`, `status`, `content_type`, `elapsed_ms` y `endpoint`, pero nunca imprimen secretos.
 
 Los logs de login automatico muestran `login_attempt`, `login_success`, `cookie_present`, `xsrf_present` y `status`, pero nunca imprimen usuario, password, cookie ni token.
 
@@ -212,19 +373,22 @@ Catalogo:
 
 - No se cargan los 9,604 productos al frontend.
 - La pagina visible pide `per_page=24`.
+- Las paginas de productos piden `include_filters=0` para no bloquearse recalculando filtros.
+- Los filtros se piden por separado con `include_filters=1` y quedan cacheados en backend/frontend.
 - La paginacion mantiene `meta.total` y `meta.last_page` reales desde ERP/cache.
 - Se hace prefetch silencioso de pagina anterior y siguiente.
 - El cache key incluye pagina, `per_page` y filtros activos.
-- Los filtros se enriquecen progresivamente con requests chicos y cacheados; no bloquean la grilla.
+- Los filtros se mantienen desde cache si un request de productos no los incluye.
 
 Backend:
 
-- `ExternalPortalDataGateway` capea `per_page` hacia ERP a maximo `100`.
+- `ExternalPortalDataGateway` capea `per_page` del catalogo hacia Fastevo B2B a maximo `100`.
 - Si llega un valor mayor, se reduce y se loguea `Portal catalog per_page capped` sin datos sensibles.
 - No debe existir `per_page=10000` en el gateway.
-- Las respuestas ERP read-only se cachean con TTL corto y ultimo valor bueno.
-- Si ERP falla, se usa `external-cache` si existe o `mock-fallback` como ultima defensa.
-- Los logs incluyen `elapsed_ms`, `status`, `content_type`, `endpoint`, `source`, `cookie_present` y `xsrf_present`, pero no imprimen secretos.
+- Las respuestas de catalogo B2B read-only se cachean con TTL corto y ultimo valor bueno.
+- Si Fastevo B2B falla, se usa `external-cache` si existe o `mock-fallback` como ultima defensa.
+- Los logs de catalogo incluyen `elapsed_ms`, `status`, `content_type`, `endpoint`, `source` y `b2b_catalog_endpoint`, pero no imprimen secretos.
+- Los logs de endpoints ERP legacy pueden incluir `cookie_present` y `xsrf_present`, pero catalogo no usa cookie ni XSRF.
 
 Como probar tiempos:
 
@@ -234,6 +398,78 @@ Como probar tiempos:
 - Ir a una pagina lejana; debe pedir solo esa pagina.
 - Revisar consola por logs `[catalog]` y `[prefetch]`.
 - Revisar `storage/logs/laravel.log` y confirmar que no aparece `per_page=10000`.
+
+## Auditoria final de performance y estabilidad
+
+Estado final: la optimizacion SPA + cache + prefetch queda estable para revision manual antes de PR. No se instalaron paquetes, no se tocaron migraciones, no se cambio `.env`, no se ejecuto build/tests y no se requiere `vue-router`.
+
+Navegacion SPA sin `vue-router`:
+
+- `resources/js/composables/usePortalNavigation.js` centraliza `currentPath`, `navigateTo()`, `normalizePath()` e `isInternalPortalPath()`.
+- Las rutas internas usan `history.pushState()`; los botones Back/Forward del navegador actualizan `currentPath` por `popstate`.
+- `App.vue` selecciona la pantalla desde `currentPath` sin recargar la app.
+- Las rutas SPA cubiertas son `/panel`, `/catalogo`, `/marcas`, `/pedidos`, `/estado-de-cuenta`, `/historial-facturas`, `/cotizaciones` y `/perfil`.
+- `/login` se mantiene como ruta publica.
+- Si el usuario queda no autenticado en una ruta interna, `App.vue` reemplaza la URL por `/login` para evitar pantallas bloqueadas al usar Back despues de logout.
+- El logout ejecuta `logout()`, limpia `portal.catalog.cache.v1` mediante `clearCatalogCache()` y navega a `/login`.
+
+Cache catalogo:
+
+- `catalogStore` mantiene cache en memoria por key de pagina, `per_page` y filtros.
+- `inFlight` evita requests duplicados para la misma key.
+- El TTL frontend del catalogo es de 7 minutos.
+- La estrategia es stale-while-revalidate: cache vigente responde inmediato; cache vencido se muestra y refresca en background; sin cache se muestra carga inicial.
+- `sessionStorage` solo se usa en `catalogStore` con la key `portal.catalog.cache.v1`.
+- `sessionStorage` guarda paginas recientes, filtros, meta y timestamp; no guarda cookies ERP, XSRF, passwords, usuario ERP ni credenciales.
+- El limite persistido es de 20 paginas recientes.
+- Al cerrar sesion se elimina `portal.catalog.cache.v1`.
+
+Prefetch:
+
+- `portalPrefetchStore` corre una sola vez por sesion frontend con `state.started`.
+- El prefetch se agenda con `requestIdleCallback` o `setTimeout`, por lo que no bloquea el render inicial.
+- `runLimited()` limita la concurrencia a 2 tareas.
+- Se precarga catalogo pagina 1, filtros de catalogo, facturas pagina 1 y pagina 2, estado de cuenta, perfil, cotizaciones y pedidos.
+- Si se entra directo a `/catalogo`, el catalogo se encola primero.
+- Los stores cacheados y los mapas `inFlight` reducen requests duplicados cuando una pantalla tambien pide sus datos al montar.
+
+Limites ERP y fallback:
+
+- `ExternalPortalDataGateway::perPage()` capea catalogo hacia ERP a maximo `100` y registra `Portal catalog per_page capped` si se solicita mas.
+- El warm-up de filtros usa `FILTER_WARMUP_PER_PAGE = 100` y procesa maximo 5 paginas por ciclo.
+- Facturas, receivables y payments tambien capean `per_page` a `100`.
+- No debe existir `per_page=10000` en el codigo.
+- El catalogo backend usa cache read-only con TTL corto y last-known-good por 6 horas.
+- Si ERP responde, `source` es `external`; si se sirve cache, `source` es `external-cache`; si no hay ERP ni cache, `source` es `mock-fallback`.
+- Los logs de ERP incluyen `endpoint`, `url`, `status`, `content_type`, `elapsed_ms`, `cookie_present` y `xsrf_present`.
+- Los logs no imprimen valores de cookie, XSRF token, password ni usuario ERP.
+
+Resultado de auditoria de codigo:
+
+- No se detecto `per_page=10000` en PHP/JS/Vue.
+- `sessionStorage` solo aparece en `catalogStore` para catalogo.
+- Los stores nuevos de facturas, account, perfil, cotizaciones y pedidos estan usados por `portalPrefetchStore`; algunas pantallas aun leen desde adapters existentes, por lo que no se deben borrar esos stores.
+- Los componentes legacy `components/navigation/*` siguen usados por `PortalLayout` y `PortalPage`, por lo que no se deben borrar sin una limpieza planificada.
+- Se aplico una correccion segura en `App.vue` para redireccionar reactivamente a `/login` cuando una ruta interna queda no autenticada.
+
+Checklist manual antes de PR:
+
+- Abrir `/login`, iniciar sesion mock y confirmar navegacion a `/panel`.
+- Navegar con sidebar/bottom nav por `/panel`, `/catalogo`, `/marcas`, `/pedidos`, `/estado-de-cuenta`, `/historial-facturas`, `/cotizaciones` y `/perfil`.
+- Confirmar que entre rutas internas no hay reload completo de la app.
+- Usar Back/Forward del navegador y confirmar que cambia la pantalla esperada.
+- Hacer logout y confirmar que vuelve a `/login`.
+- Despues de logout, usar Back y confirmar que no queda visible ninguna pantalla protegida.
+- Abrir `/catalogo`, esperar primera carga y confirmar `sessionStorage['portal.catalog.cache.v1']`.
+- Ir de `/catalogo` a otra pantalla y volver; confirmar respuesta inmediata o casi inmediata.
+- Cambiar pagina 1 -> 2 -> 3 -> 1 y confirmar cache en consola con logs `[catalog]`.
+- Ir a una pagina lejana y confirmar que solo pide esa pagina y vecinos.
+- Confirmar que logout elimina `portal.catalog.cache.v1`.
+- Revisar consola por `[prefetch] started` y `[prefetch] completed` una sola vez por sesion.
+- Revisar Network para verificar que no haya requests duplicados por la misma key de catalogo.
+- Revisar `storage/logs/laravel.log` y confirmar `elapsed_ms`, `source`, `cookie_present` y `xsrf_present` sin secretos.
+- Confirmar que no aparece `per_page=10000`.
+- Probar `/api/portal/catalog?page=1&per_page=1000&include_filters=0` y confirmar que backend responde con `per_page` capeado a `100`.
 
 ## Rutas
 

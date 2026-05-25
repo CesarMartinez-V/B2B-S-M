@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
 import { useAccountStore } from './accountStore.js';
 import { useCatalogStore } from './catalogStore.js';
+import { useDashboardStore } from './dashboardStore.js';
 import { useInvoiceStore } from './invoiceStore.js';
 import { useOrderStore } from './orderStore.js';
 import { useProfileStore } from './profileStore.js';
@@ -8,6 +9,7 @@ import { useQuoteStore } from './quoteStore.js';
 
 const state = reactive({ started: false, running: false, completed: false, logs: [] });
 const catalogStore = useCatalogStore();
+const dashboardStore = useDashboardStore();
 const invoiceStore = useInvoiceStore();
 const accountStore = useAccountStore();
 const profileStore = useProfileStore();
@@ -43,6 +45,12 @@ const schedule = (callback) => {
 
 export const usePortalPrefetchStore = () => ({
     state,
+    reset() {
+        state.started = false;
+        state.running = false;
+        state.completed = false;
+        state.logs = [];
+    },
     run({ priorityPath = '' } = {}) {
         if (state.started) return;
 
@@ -57,13 +65,18 @@ export const usePortalPrefetchStore = () => ({
             });
 
             const tasks = [
+                ...(priorityPath === '/panel' ? [() => dashboardStore.fetchSummary()] : []),
                 ...(priorityPath === '/catalogo' ? [catalogTask] : []),
+                ...(priorityPath === '/pedidos' ? [() => orderStore.fetchPage({ page: 1, per_page: 10 })] : []),
+                ...(priorityPath === '/historial-facturas' ? [() => invoiceStore.fetchPage({ page: 1, per_page: 20, include_filters: 1 }).then(() => invoiceStore.prefetchPage({ page: 2, per_page: 20, include_filters: 0 }))] : []),
+                ...(priorityPath === '/estado-de-cuenta' ? [() => accountStore.fetchSummary({ page: 1, per_page: 20, limit: 20, include_summary: 1, include_filters: 1 }).then(() => accountStore.prefetch({ page: 2, per_page: 20, limit: 20, include_summary: 0, include_filters: 0 }))] : []),
                 () => profileStore.fetchProfile(),
-                () => accountStore.fetchSummary(),
+                ...(priorityPath === '/estado-de-cuenta' ? [] : [() => accountStore.prefetch({ page: 1, per_page: 20, limit: 20, include_summary: 1, include_filters: 1 }).then(() => accountStore.prefetch({ page: 2, per_page: 20, limit: 20, include_summary: 0, include_filters: 0 }))]),
+                ...(priorityPath === '/panel' ? [] : [() => dashboardStore.fetchSummary()]),
                 ...(priorityPath === '/catalogo' ? [] : [catalogTask]),
-                () => invoiceStore.fetchPage({ page: 1, per_page: 20 }).then(() => invoiceStore.prefetchPage({ page: 2, per_page: 20 })),
+                ...(priorityPath === '/historial-facturas' ? [] : [() => invoiceStore.prefetch({ page: 1, per_page: 20, include_filters: 1 }).then(() => invoiceStore.prefetchPage({ page: 2, per_page: 20, include_filters: 0 }))]),
                 () => quoteStore.fetchPage({ page: 1, per_page: 20 }),
-                () => orderStore.fetchPage({ page: 1, per_page: 10 }),
+                ...(priorityPath === '/pedidos' ? [] : [() => orderStore.fetchPage({ page: 1, per_page: 10 })]),
             ];
 
             await runLimited(tasks, 2);

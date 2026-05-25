@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Portal\PortalAccountController;
+use App\Http\Controllers\Portal\PortalAuthController;
 use App\Http\Controllers\Portal\PortalBrandsController;
 use App\Http\Controllers\Portal\PortalCatalogController;
 use App\Http\Controllers\Portal\PortalDashboardController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Portal\PortalSupportController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('portal')->group(function (): void {
+    Route::post('/auth/identity', [PortalAuthController::class, 'identity']);
     Route::get('/dashboard', [PortalDashboardController::class, 'show']);
     Route::get('/catalog', [PortalCatalogController::class, 'index']);
     Route::get('/brands', [PortalBrandsController::class, 'index']);

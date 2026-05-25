@@ -31,9 +31,21 @@ const quoteResource = createDataAdapter({
     extract: (response) => response?.data ?? {},
     normalize: (payload) => ({
         stats: payload.stats ?? quoteStats,
-        quotes: payload.quotes ?? mockQuotes,
+        quotes: (payload.quotes ?? mockQuotes).map((quote) => ({
+            ...quote,
+            id: quote.id ?? quote.number,
+            amount: Number(quote.amount ?? quote.totalValue ?? 0),
+            status: quote.status ?? 'Pendiente',
+            ref: quote.ref ?? `REF: Cotización ${quote.number ?? quote.id}`,
+            vehicle: quote.vehicle ?? 'Cotización comercial',
+            brand: quote.brand ?? 'Inversiones S&M',
+            archived: Boolean(quote.archived),
+            items: quote.items ?? [],
+        })),
         rows: payload.rows ?? quoteRows,
         mobileQuotes: payload.mobileQuotes ?? payload.mobile_quotes ?? mobileQuotes,
+        meta: payload._meta ?? {},
+        source: payload._source ?? 'mock',
     }),
 });
 
@@ -46,10 +58,13 @@ const normalizeCartItems = (cart) => {
         const price = typeof rawPrice === 'number' ? rawPrice : parseCurrency(rawPrice);
 
         return {
+            id: item.id || item.sku || item.code || `TMP-${index + 1}`,
             name: item.name || item.nombre || item.title || `Item ${index + 1}`,
             sku: item.sku || item.id || item.code || `TMP-${index + 1}`,
+            brand: item.brand || item.marca || 'Marca por confirmar',
             qty,
             price,
+            availableQty: item.availableQty ?? item.stock ?? null,
         };
     });
 };
@@ -62,13 +77,28 @@ export const quoteService = {
     loadQuotes() {
         if (typeof window === 'undefined') return clone(mockQuotes);
 
-        return readJson(STORAGE_KEY, clone(quoteResource.list().quotes));
+        return clone(quoteResource.list().quotes ?? readJson(STORAGE_KEY, clone(mockQuotes)));
+    },
+
+    loadLocalQuotes() {
+        if (typeof window === 'undefined') return [];
+
+        return clone(readJson(STORAGE_KEY, [])).filter((quote) => quote?.local === true || String(quote?.id || '').includes('QT-TMP'));
     },
 
     saveQuotes(quotes) {
         if (typeof window === 'undefined') return;
 
-        writeJson(STORAGE_KEY, quotes);
+        writeJson(STORAGE_KEY, quotes.filter((quote) => quote?.local === true || String(quote?.id || '').includes('QT-TMP')));
+    },
+
+    addLocalQuote(quote) {
+        if (typeof window === 'undefined' || !quote) return quote;
+
+        const localQuote = { ...quote, local: true };
+        const current = this.loadLocalQuotes().filter((item) => item.id !== localQuote.id);
+        writeJson(STORAGE_KEY, [localQuote, ...current]);
+        return localQuote;
     },
 
     getTemporaryCart(runtimeItems = []) {
@@ -95,14 +125,26 @@ export const quoteService = {
             id: `#QT-TMP-${number}`,
             client: 'Cliente temporal',
             ref: 'REF: Carrito temporal',
-            vehicle: 'Vehiculo por definir',
-            brand: 'Seleccion desde catalogo',
+            vehicle: 'Vehículo por definir',
+            brand: 'Selección desde catálogo',
             date: 'Ahora',
             amount: total,
-            status: 'pending',
+            status: 'Pendiente',
             archived: false,
+            local: true,
             items: cart.items,
         };
+    },
+
+    submitTemporaryRequest(quote) {
+        if (!quote) return null;
+
+        return this.addLocalQuote({
+            ...quote,
+            status: 'Solicitud preparada',
+            submittedAt: new Date().toISOString(),
+            note: 'Solicitud preparada. La creación real en ERP queda pendiente de aprobación.',
+        });
     },
 
     async createQuote(payload) {

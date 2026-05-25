@@ -1,6 +1,6 @@
 export const portalBrand = {
     title: 'Portal B2B',
-    subtitle: 'Premium Automotive Parts',
+    subtitle: 'Repuestos automotrices premium',
     topLabel: 'Inversiones S&M',
 };
 
@@ -22,10 +22,10 @@ export const portalNavItems = [
 ];
 
 export const portalBottomNavItems = [
-    { label: 'Home', href: '/panel', icon: 'home' },
-    { label: 'Catalog', href: '/catalogo', icon: 'search' },
-    { label: 'Orders', href: '/pedidos', icon: 'shopping_cart' },
-    { label: 'Invoices', href: '/historial-facturas', icon: 'receipt_long' },
-    { label: 'Quote', href: '/cotizaciones', icon: 'description' },
-    { label: 'Profile', href: '/perfil', icon: 'person_outline' },
+    { label: 'Inicio', href: '/panel', icon: 'home' },
+    { label: 'Catálogo', href: '/catalogo', icon: 'search' },
+    { label: 'Pedidos', href: '/pedidos', icon: 'shopping_cart' },
+    { label: 'Historial', href: '/historial-facturas', icon: 'receipt_long' },
+    { label: 'Cotizar', href: '/cotizaciones', icon: 'description' },
+    { label: 'Perfil', href: '/perfil', icon: 'person_outline' },
 ];

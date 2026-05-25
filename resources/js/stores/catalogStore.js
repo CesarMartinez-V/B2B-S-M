@@ -29,6 +29,7 @@ function normalizeProduct(product) {
     const hasQty = availableQty !== null && availableQty !== undefined && availableQty !== '';
     const qty = hasQty ? Number(availableQty) : null;
     const isAvailable = product.isAvailable ?? product.is_available ?? (qty !== null && qty > 0);
+    const stockLabel = isAvailable === true ? 'Disponible' : (qty === 0 ? 'No disponible' : 'Consultar disponibilidad');
 
     return {
         ...product,
@@ -39,7 +40,7 @@ function normalizeProduct(product) {
         stock: qty,
         availableQty: qty,
         isAvailable,
-        stockLabel: product.stockLabel ?? product.stock_label ?? (qty !== null && qty > 0 ? `Disponible: ${qty} unidades` : 'Consultar disponibilidad'),
+        stockLabel,
         lastStockUpdate: product.lastStockUpdate ?? product.last_stock_update ?? '',
     };
 }

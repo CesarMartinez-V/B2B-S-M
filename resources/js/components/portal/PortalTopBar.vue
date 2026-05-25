@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useTheme } from '../../composables/useTheme.js';
 import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { portalBrand, portalUser } from '../../portalNavigation.js';
+import { getProfileUser } from '../../services/profileService.js';
 
-defineProps({
+const props = defineProps({
     brandLabel: { type: String, default: portalBrand.topLabel },
     searchPlaceholder: { type: String, default: 'Buscar socio, factura o pedido...' },
     showSearch: { type: Boolean, default: true },
@@ -16,6 +17,9 @@ defineProps({
 });
 
 const { isLightMode, toggleTheme, initTheme } = useTheme();
+const profileUser = computed(() => getProfileUser() || {});
+const resolvedUserName = computed(() => profileUser.value.name || props.userName);
+const resolvedAvatarSrc = computed(() => profileUser.value.avatar || props.avatarSrc);
 
 onMounted(() => {
     initTheme();
@@ -25,7 +29,7 @@ onMounted(() => {
 <template>
     <header class="portal-topbar">
         <div><strong>{{ brandLabel }}</strong><label v-if="showSearch"><span class="material-symbols-outlined">search</span><input :placeholder="searchPlaceholder" type="text"></label></div>
-        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a class="portal-user-link" :href="userHref" @click.prevent="navigateTo(userHref)"><span>{{ userName }}</span><img :src="avatarSrc" :alt="userName"></a></nav>
+        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a class="portal-user-link" :href="userHref" @click.prevent="navigateTo(userHref)"><span>{{ resolvedUserName }}</span><img :src="resolvedAvatarSrc" :alt="resolvedUserName"></a></nav>
     </header>
 </template>
 

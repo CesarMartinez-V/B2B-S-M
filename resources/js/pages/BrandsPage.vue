@@ -1,9 +1,12 @@
 <script setup>
 import AppShell from '../components/portal/AppShell.vue';
 import { useModal } from '../composables/useModal.js';
+import { usePortalActions } from '../composables/usePortalActions.js';
 import { useToast } from '../composables/useToast.js';
+import { catalogService } from '../services/catalogService.js';
 
 const { openModal } = useModal();
+const { goToCatalog, openContactSeller } = usePortalActions();
 const { success } = useToast();
 
 const avatarDesktop = 'https://lh3.googleusercontent.com/aida-public/AB6AXuD2P73pJk1BxV6a2wDUDn93EJKZ--c4NXIstuINZcot5N9dwQYkw7Nw7aowrRr4ubiU4wECiHYesFoXOeDHmj9QEk-4vOh57FWneCzyWlWkuybA-3Exd-SyQlEGSiUZgVf73f221Av9Ey9jS9oLiz1XIPzusz5495NcZ0qRVV7aucxH48CF_9FcBJF9qWqLTIPfFUXGXe9kKbLpLXLixGSoS3UjXq2nToxV8qNMj_Dx6oAjft5krBpmKId5rh5_GZZksNXaKBHnYqM';
@@ -28,14 +31,31 @@ const mobileBrands = [
 const stats = [
     { icon: 'verified', label: 'Garantía', value: '100% Original' },
     { icon: 'local_shipping', label: 'Distribución', value: 'Nacional Directa' },
-    { icon: 'inventory', label: 'Stock', value: '+50,000 SKUs' },
-    { icon: 'handshake', label: 'Partners', value: 'Nivel Platinum' },
+    { icon: 'inventory', label: 'Inventario', value: '+50,000 SKUs' },
+    { icon: 'handshake', label: 'Aliados', value: 'Nivel Platino' },
 ];
 
 const handleBrandCta = (label) => {
+    if (label === 'Ver catálogo completo') {
+        goToCatalog();
+        return;
+    }
+
+    openContactSeller({ title: label, reason: 'Consulta sobre marcas especiales y condiciones comerciales.' });
+};
+
+const openBrandCatalog = (brand) => {
+    const brandName = brand.name.split(' ')[0];
+    const exists = catalogService.listProducts().some((product) => String(product.brand || '').toLowerCase().includes(brandName.toLowerCase()));
+
+    if (exists) {
+        goToCatalog({ brand: brandName });
+        return;
+    }
+
     openModal({
-        title: label,
-        message: 'Registraremos tu interés para que un consultor B2B revise disponibilidad, marcas especiales y condiciones comerciales.',
+        title: brand.name,
+        message: 'No hay productos disponibles para esta marca en los filtros reales cargados. Podemos registrar una consulta para revisión comercial.',
         icon: 'handshake',
         confirmText: 'Registrar interés',
         cancelText: 'Cerrar',
@@ -47,8 +67,8 @@ const handleBrandCta = (label) => {
 <template>
     <div class="brands-page">
         <AppShell active-route="/marcas" desktop-search-placeholder="Buscar socio, factura o pedido..." mobile-title="Inversiones S&amp;M" :avatar-src="avatarDesktop" :mobile-avatar-src="avatarMobile">
-            <template #desktop><main class="desktop-main shell-content"><div class="wrap"><section class="desktop-hero glass-card"><i></i><b></b><h1>Nuestras Marcas</h1><p>Aliados estratégicos con los fabricantes líderes de la industria automotriz global. Calidad certificada y rendimiento premium para su flota o inventario.</p></section><section class="brand-grid"><article v-for="brand in desktopBrands" :key="brand.name" class="brand-card glass-card"><div><header><div class="logo-box elevated-card"><img :src="brand.image" :alt="`${brand.name} Logo Placeholder`"></div><div class="country"><span :style="{ background: brand.flag }"></span><small>{{ brand.country }}</small></div></header><h3>{{ brand.name }}</h3><p>{{ brand.text }}</p><footer><span v-for="tag in brand.tags" :key="tag">{{ tag }}</span></footer></div></article><article class="partner-card"><div></div><span class="material-symbols-outlined">workspace_premium</span><h3>¿Busca una marca específica?</h3><p>Importamos repuestos exclusivos bajo pedido especial para nuestros clientes B2B.</p><button type="button" @click="handleBrandCta('Contactar consultor')">Contactar Consultor</button></article></section><section class="stats-grid"><article v-for="stat in stats" :key="stat.label" class="glass-card"><span class="material-symbols-outlined">{{ stat.icon }}</span><div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong></div></article></section></div></main></template>
-            <template #mobile><main class="mobile-main"><section class="mobile-heading"><h2>Nuestras Marcas</h2><p>Descubre nuestro catálogo exclusivo de repuestos premium. Trabajamos solo con los líderes mundiales en ingeniería automotriz.</p></section><section class="mobile-grid"><article v-for="brand in mobileBrands" :key="brand.name" class="mobile-brand-card glass-card"><div class="mobile-image"><img :src="brand.image" :alt="brand.name"><i></i><b :class="brand.tone">{{ brand.country }}</b></div><div class="mobile-info"><header><h3>{{ brand.name }}</h3><span class="material-symbols-outlined filled">{{ brand.icon }}</span></header><p>{{ brand.text }}</p><footer><span v-for="tag in brand.tags" :key="tag">{{ tag }}</span></footer></div></article><article class="mobile-cta elevated-card"><div><span class="material-symbols-outlined">search</span></div><h3>¿Buscas algo más?</h3><p>Explora nuestro catálogo completo de más de 50 marcas aliadas.</p><button type="button" @click="handleBrandCta('Ver catálogo completo')">Ver Todo el Catálogo</button></article></section></main></template>
+            <template #desktop><main class="desktop-main shell-content"><div class="wrap"><section class="desktop-hero glass-card"><i></i><b></b><h1>Nuestras Marcas</h1><p>Aliados estratégicos con los fabricantes líderes de la industria automotriz global. Calidad certificada y rendimiento premium para su flota o inventario.</p></section><section class="brand-grid"><article v-for="brand in desktopBrands" :key="brand.name" class="brand-card glass-card" @click="openBrandCatalog(brand)"><div><header><div class="logo-box elevated-card"><img :src="brand.image" :alt="`${brand.name} Logo Placeholder`"></div><div class="country"><span :style="{ background: brand.flag }"></span><small>{{ brand.country }}</small></div></header><h3>{{ brand.name }}</h3><p>{{ brand.text }}</p><footer><span v-for="tag in brand.tags" :key="tag">{{ tag }}</span></footer></div></article><article class="partner-card"><div></div><span class="material-symbols-outlined">workspace_premium</span><h3>¿Busca una marca específica?</h3><p>Importamos repuestos exclusivos bajo pedido especial para nuestros clientes B2B.</p><button type="button" @click="handleBrandCta('Contactar consultor')">Contactar Consultor</button></article></section><section class="stats-grid"><article v-for="stat in stats" :key="stat.label" class="glass-card"><span class="material-symbols-outlined">{{ stat.icon }}</span><div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong></div></article></section></div></main></template>
+            <template #mobile><main class="mobile-main"><section class="mobile-heading"><h2>Nuestras Marcas</h2><p>Descubre nuestro catálogo exclusivo de repuestos premium. Trabajamos solo con los líderes mundiales en ingeniería automotriz.</p></section><section class="mobile-grid"><article v-for="brand in mobileBrands" :key="brand.name" class="mobile-brand-card glass-card" @click="openBrandCatalog(brand)"><div class="mobile-image"><img :src="brand.image" :alt="brand.name"><i></i><b :class="brand.tone">{{ brand.country }}</b></div><div class="mobile-info"><header><h3>{{ brand.name }}</h3><span class="material-symbols-outlined filled">{{ brand.icon }}</span></header><p>{{ brand.text }}</p><footer><span v-for="tag in brand.tags" :key="tag">{{ tag }}</span></footer></div></article><article class="mobile-cta elevated-card"><div><span class="material-symbols-outlined">search</span></div><h3>¿Buscas algo más?</h3><p>Explora nuestro catálogo completo de más de 50 marcas aliadas.</p><button type="button" @click="handleBrandCta('Ver catálogo completo')">Ver catálogo completo</button></article></section></main></template>
         </AppShell>
     </div>
 </template>

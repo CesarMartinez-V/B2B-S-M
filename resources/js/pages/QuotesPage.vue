@@ -1,10 +1,14 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import AppShell from '../components/portal/AppShell.vue';
+import StatusBadge from '../components/ui/StatusBadge.vue';
+import PaginationControl from '../components/ui/PaginationControl.vue';
 import { useConfirm } from '../composables/useConfirm.js';
 import { useModal } from '../composables/useModal.js';
 import { useToast } from '../composables/useToast.js';
+import { navigateTo } from '../composables/usePortalNavigation.js';
 import { quoteService } from '../services/quoteService.js';
+import { useQuoteStore } from '../stores/quoteStore.js';
 import { formatCurrency } from '../utils/currency.js';
 import { useQuoteCartStore } from '../quoteCartStore.js';
 
@@ -19,24 +23,66 @@ const tabs = [
 const statusOptions = [
     { key: 'all', label: 'Todos los estados' },
     { key: 'pending', label: 'Pendientes' },
-    { key: 'approved', label: 'Aprobadas' },
+    { key: 'converted', label: 'Convertidas' },
+    { key: 'prepared', label: 'Solicitudes preparadas' },
     { key: 'rejected', label: 'Rechazadas' },
 ];
-const statusLabels = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
-const statusTones = { pending: 'pending', approved: 'approved', rejected: 'rejected' };
+const statusLabels = { pending: 'Pendiente', converted: 'Convertida', approved: 'Aprobada', rejected: 'Rechazada', prepared: 'Solicitud preparada' };
+const statusTones = { pending: 'pending', converted: 'approved', approved: 'approved', rejected: 'rejected', prepared: 'approved', Pendiente: 'pending', Convertida: 'approved', 'Solicitud preparada': 'approved' };
+const normalizeStatus = (status) => {
+    const value = String(status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (['convertida', 'convertido', 'converted', 'approved', 'aprobada'].includes(value)) return 'converted';
+    if (['rechazada', 'rechazado', 'rejected'].includes(value)) return 'rejected';
+    if (['solicitud preparada', 'prepared'].includes(value)) return 'prepared';
+    return 'pending';
+};
 
 const { openModal } = useModal();
 const { success, info } = useToast();
 const { askConfirm } = useConfirm();
 const quoteCart = useQuoteCartStore();
+const quoteStore = useQuoteStore();
+const quoteCartItems = quoteCart.items;
+const quoteCartCount = quoteCart.count;
+const quoteCartTotal = quoteCart.total;
 const quotes = ref(quoteService.loadQuotes());
 const activeTab = ref('all');
 const search = ref('');
 const statusFilter = ref('all');
+const currentPage = ref(1);
+const perPage = 20;
+
+const quoteParams = (page = currentPage.value) => ({
+    page,
+    per_page: perPage,
+    query: search.value,
+    status: statusFilter.value === 'all' ? '' : statusFilter.value,
+});
+
+const loadQuotesPage = async (page = currentPage.value) => {
+    currentPage.value = page;
+    const data = await quoteStore.fetchPage(quoteParams(page));
+    if (data?.quotes) {
+        const localQuotes = quoteService.loadLocalQuotes();
+        const localIds = new Set(localQuotes.map((quote) => quote.id));
+        quotes.value = [...localQuotes, ...data.quotes.filter((quote) => !localIds.has(quote.id))];
+    }
+    currentPage.value = Number(data?.meta?.current_page ?? data?.meta?.page ?? page) || page;
+};
+
+onMounted(() => {
+    void loadQuotesPage(1);
+});
+
+watch([search, statusFilter], () => {
+    void loadQuotesPage(1);
+});
 
 watch(quotes, (value) => quoteService.saveQuotes(value), { deep: true });
 
 const money = formatCurrency;
+const quoteMeta = computed(() => quoteStore.state.data?.meta ?? {});
+const pageCount = computed(() => Math.max(1, Number(quoteMeta.value.last_page) || 1));
 const normalize = (value) => String(value || '').toLowerCase();
 const visibleBase = computed(() => {
     if (activeTab.value === 'archived') return quotes.value.filter((quote) => quote.archived);
@@ -47,41 +93,87 @@ const visibleBase = computed(() => {
 const filteredQuotes = computed(() => visibleBase.value.filter((quote) => {
     const haystack = normalize([quote.id, quote.client, quote.ref, quote.vehicle, quote.brand].join(' '));
     const matchesSearch = !search.value || haystack.includes(normalize(search.value));
-    const matchesStatus = statusFilter.value === 'all' || quote.status === statusFilter.value;
+    const matchesStatus = statusFilter.value === 'all' || normalizeStatus(quote.status) === statusFilter.value;
 
     return matchesSearch && matchesStatus;
 }));
 const stats = computed(() => {
     const activeQuotes = quotes.value.filter((quote) => !quote.archived);
-    const pending = activeQuotes.filter((quote) => quote.status === 'pending').length;
-    const approved = activeQuotes.filter((quote) => quote.status === 'approved').length;
+    const pending = activeQuotes.filter((quote) => normalizeStatus(quote.status) === 'pending').length;
+    const approved = activeQuotes.filter((quote) => normalizeStatus(quote.status) === 'converted').length;
     const total = activeQuotes.reduce((sum, quote) => sum + Number(quote.amount || 0), 0);
+
+    if (quoteStore.state.data?.stats?.length) return quoteStore.state.data.stats;
 
     return [
         { icon: 'request_quote', value: String(activeQuotes.length), label: 'Total Cotizaciones', meta: `${quotes.value.filter((quote) => quote.archived).length} archivadas`, tone: 'primary' },
         { icon: 'hourglass_empty', value: String(pending), label: 'Pendientes', meta: `${pending} activas`, tone: 'tertiary' },
-        { icon: 'check_circle', value: String(approved), label: 'Aprobadas', meta: activeQuotes.length ? `${Math.round((approved / activeQuotes.length) * 100)}% exito` : '0% exito', tone: 'success' },
+        { icon: 'check_circle', value: String(approved), label: 'Convertidas', meta: activeQuotes.length ? `${Math.round((approved / activeQuotes.length) * 100)}% éxito` : '0% éxito', tone: 'success' },
         { icon: 'trending_up', value: formatCurrency(total), label: 'Valor Estimado Mes', tone: 'highlight' },
     ];
 });
 
 const quoteDetail = (quote) => [
-    `${quote.id} - ${statusLabels[quote.status]}`,
+    `${quote.id} - ${statusLabels[normalizeStatus(quote.status)]}`,
     `Cliente: ${quote.client}`,
-    `Vehiculo: ${quote.vehicle}`,
+    `Vehículo: ${quote.vehicle}`,
     `Marca: ${quote.brand}`,
     `Fecha: ${quote.date}`,
     `Total: ${formatCurrency(quote.amount)}`,
     `Items: ${quote.items.map((item) => `${item.qty} x ${item.name}`).join(', ')}`,
 ].join('\n');
-const showDetail = (quote) => openModal({ title: 'Detalle de cotizacion', message: quoteDetail(quote), icon: 'request_quote', confirmText: 'Cerrar' });
+const showDetail = (quote) => openModal({ title: 'Detalle de cotización', message: quoteDetail(quote), icon: 'request_quote', confirmText: 'Cerrar' });
+const tempCartLines = computed(() => quoteCartItems.value.map((item) => `${item.quantity || 1} x ${item.name} (${item.sku || item.id}) - ${formatCurrency(Number(item.priceValue || 0) * Number(item.quantity || 1))}`));
+const updateTempQty = (item, event) => {
+    const qty = Number(event.target.value) || 1;
+    if (!quoteCart.updateQty(item.id || item.sku, qty)) {
+        event.target.value = item.quantity || 1;
+        info('La cantidad supera la disponibilidad registrada para este producto.', 'Cantidad no disponible');
+    }
+};
+const removeTempItem = (item) => {
+    quoteCart.removeItem(item.id || item.sku);
+    success('Producto removido de la cotización temporal.');
+};
+const clearTempQuote = () => askConfirm({
+    title: 'Vaciar cotización temporal',
+    message: 'Se eliminarán los productos seleccionados solo de este portal. No se modifica ERP.',
+    confirmText: 'Vaciar',
+    tone: 'danger',
+    onConfirm: () => {
+        quoteCart.clear();
+        success('Cotización temporal vaciada.');
+    },
+});
+const submitTemporaryRequest = () => {
+    const cart = quoteService.getTemporaryCart(quoteCart.items.value);
+    if (!cart?.items?.length) {
+        info('Agrega productos desde el catálogo antes de preparar la solicitud.');
+        return;
+    }
+
+    openModal({
+        title: 'Enviar solicitud temporal',
+        message: `Se preparará una solicitud local con ${cart.items.length} producto(s) por ${formatCurrency(quoteCartTotal.value)}.\nLa creación real en ERP queda pendiente de aprobación.`,
+        icon: 'outgoing_mail',
+        confirmText: 'Preparar solicitud',
+        cancelText: 'Cancelar',
+        onConfirm: () => {
+            const quote = quoteService.submitTemporaryRequest(quoteService.createQuoteFromCart(cart));
+            quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id)];
+            quoteCart.clear();
+            activeTab.value = 'all';
+            success('Solicitud preparada. No se creó documento real en ERP.');
+        },
+    });
+};
 const updateQuote = (quote, changes, message) => {
     Object.assign(quote, changes);
     success(message);
 };
 const confirmAction = (quote, action, changes, tone = 'primary') => askConfirm({
-    title: `${action} cotizacion`,
-    message: `Se aplicara la accion sobre ${quote.id}.`,
+    title: `${action} cotización`,
+    message: `Se aplicará como marca local de vista sobre ${quote.id}. No crea ni modifica documentos reales en ERP.`,
     confirmText: action,
     tone,
     onConfirm: () => updateQuote(quote, changes, `${quote.id} actualizada correctamente.`),
@@ -90,20 +182,20 @@ const openNewQuote = () => {
     const cart = quoteService.getTemporaryCart(quoteCart.items.value);
 
     if (!cart) {
-        openModal({ title: 'Nueva cotizacion', message: 'No hay carrito temporal disponible. Agrega productos al carrito temporal para crear una cotizacion local.', icon: 'add_shopping_cart', confirmText: 'Entendido' });
-        info('No se encontro carrito temporal para cotizar.');
+        openModal({ title: 'Nueva cotización', message: 'Primero selecciona productos desde el catálogo. Te llevaremos al catálogo para preparar la cotización temporal.', icon: 'add_shopping_cart', confirmText: 'Ir al catálogo', cancelText: 'Cerrar', onConfirm: () => navigateTo('/catalogo') });
+        info('Selecciona productos del catálogo para cotizar.');
         return;
     }
 
     openModal({
-        title: 'Nueva cotizacion',
-        message: `Se creara una cotizacion local con ${cart.items.length} items del carrito temporal.`,
+        title: 'Nueva cotización',
+        message: `Se creará una cotización local con ${cart.items.length} artículos del carrito temporal.`,
         icon: 'add',
-        confirmText: 'Crear cotizacion',
+        confirmText: 'Crear cotización',
         cancelText: 'Cancelar',
         onConfirm: () => {
-            const quote = quoteService.createQuoteFromCart(cart);
-            quotes.value.unshift(quote);
+            const quote = quoteService.addLocalQuote(quoteService.createQuoteFromCart(cart));
+            quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id)];
             quoteCart.clear();
             activeTab.value = 'all';
             success(`${quote.id} creada desde carrito temporal.`);
@@ -115,9 +207,18 @@ const openNewQuote = () => {
 <template>
     <div class="quotes-page">
         <AppShell active-route="/cotizaciones" desktop-search-placeholder="Buscar socio, factura o pedido..." mobile-title="Inversiones S&amp;M" :avatar-src="avatarDesktop" :mobile-avatar-src="avatarMobile">
-            <template #desktop><div class="wrap shell-content"><section class="page-head"><div><h1>Cotizaciones</h1><p>Gestione y revise sus solicitudes de repuestos premium.</p></div><div class="quote-head-actions"><div class="tabs glass"><button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button></div><button class="new-quote" type="button" @click="openNewQuote"><span class="material-symbols-outlined">add</span>Nueva Cotización</button></div></section><section class="stats-grid"><article v-for="stat in stats" :key="stat.label" :class="['stat-card','glass',stat.tone]"><header><span class="material-symbols-outlined">{{ stat.icon }}</span><b v-if="stat.meta">{{ stat.meta }}</b></header><strong>{{ stat.value }}</strong><p>{{ stat.label }}</p></article></section><section class="table-card glass"><header><h3>{{ activeTab === 'archived' ? 'Archivadas' : activeTab === 'recent' ? 'Recientes' : 'Todas' }} <span>LIVE</span></h3><div><label class="filter-select"><span class="material-symbols-outlined">filter_list</span><select v-model="statusFilter"><option v-for="option in statusOptions" :key="option.key" :value="option.key">{{ option.label }}</option></select></label><label><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Filtrar por cliente o ID..." type="text"></label></div></header><div class="table-scroll"><table><thead><tr><th>ID Cotización</th><th>Vehículo / Marca</th><th>Fecha</th><th>Importe Total</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="row in filteredQuotes" :key="row.id"><td><strong>{{ row.id }}</strong><small>{{ row.ref }}</small></td><td><div class="vehicle"><span class="material-symbols-outlined">directions_car</span><div><strong>{{ row.vehicle }}</strong><small>{{ row.brand }}</small></div></div></td><td>{{ row.date }}</td><td><strong>{{ money(row.amount) }}</strong></td><td><span :class="['status',statusTones[row.status]]"><i></i>{{ statusLabels[row.status] }}</span></td><td><div class="row-actions"><button type="button" title="Ver detalle" @click="showDetail(row)"><span class="material-symbols-outlined">visibility</span></button><button v-if="row.status !== 'approved' && !row.archived" type="button" title="Aprobar" @click="confirmAction(row, 'Aprobar', { status: 'approved' })"><span class="material-symbols-outlined">check_circle</span></button><button v-if="row.status !== 'rejected' && !row.archived" type="button" title="Rechazar" @click="confirmAction(row, 'Rechazar', { status: 'rejected' }, 'danger')"><span class="material-symbols-outlined">cancel</span></button><button v-if="!row.archived" type="button" title="Archivar" @click="confirmAction(row, 'Archivar', { archived: true })"><span class="material-symbols-outlined">archive</span></button><button v-else type="button" title="Restaurar" @click="confirmAction(row, 'Restaurar', { archived: false })"><span class="material-symbols-outlined">unarchive</span></button></div></td></tr><tr v-if="!filteredQuotes.length"><td colspan="6" class="empty-row">No hay cotizaciones para los filtros seleccionados.</td></tr></tbody></table></div><footer><span>Mostrando {{ filteredQuotes.length }} de {{ visibleBase.length }} resultados</span><div><button disabled><span class="material-symbols-outlined">chevron_left</span></button><button class="active">1</button><button disabled><span class="material-symbols-outlined">chevron_right</span></button></div></footer></section></div></template>
-            <template #mobile><main class="mobile-main"><section class="mobile-title"><h1>Cotizaciones</h1><p>Gestión de presupuestos automotrices</p></section><div class="mobile-tabs"><button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button></div><label class="mobile-search glass"><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Buscar por número o cliente..." type="text"><select v-model="statusFilter" aria-label="Filtrar estado"><option v-for="option in statusOptions" :key="option.key" :value="option.key">{{ option.label }}</option></select></label><section class="mobile-list"><article v-for="quote in filteredQuotes" :key="quote.id" class="quote-card glass" @click="showDetail(quote)"><header><div><span :class="statusTones[quote.status]">{{ quote.id }}</span><h3>{{ quote.client }}</h3></div><b :class="['pill',statusTones[quote.status]]"><i></i>{{ statusLabels[quote.status] }}</b></header><div class="quote-meta"><div><small>Repuestos</small><strong>{{ quote.items[0]?.name || quote.ref }}</strong></div><div><small>Total</small><strong>{{ money(quote.amount) }}</strong></div></div><footer><span class="material-symbols-outlined">schedule</span><span>{{ quote.date }}</span><button v-if="quote.status !== 'approved' && !quote.archived" type="button" @click.stop="confirmAction(quote, 'Aprobar', { status: 'approved' })"><span class="material-symbols-outlined">check_circle</span></button><button v-if="quote.status !== 'rejected' && !quote.archived" type="button" @click.stop="confirmAction(quote, 'Rechazar', { status: 'rejected' }, 'danger')"><span class="material-symbols-outlined">cancel</span></button><button type="button" @click.stop="quote.archived ? confirmAction(quote, 'Restaurar', { archived: false }) : confirmAction(quote, 'Archivar', { archived: true })"><span class="material-symbols-outlined">{{ quote.archived ? 'unarchive' : 'archive' }}</span></button></footer></article><p v-if="!filteredQuotes.length" class="mobile-empty">No hay cotizaciones para los filtros seleccionados.</p></section></main><button class="fab" type="button" @click="openNewQuote"><span class="material-symbols-outlined">add</span></button></template>
+            <template #desktop><div class="wrap shell-content"><section class="page-head"><div><h1>Cotizaciones</h1><p>Gestione y revise sus solicitudes de repuestos premium.</p></div><div class="quote-head-actions"><div class="tabs glass"><button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button></div><button class="new-quote" type="button" @click="openNewQuote"><span class="material-symbols-outlined">add</span>Nueva Cotización</button></div></section><section class="stats-grid"><article v-for="stat in stats" :key="stat.label" :class="['stat-card','glass',stat.tone]"><header><span class="material-symbols-outlined">{{ stat.icon }}</span><b v-if="stat.meta">{{ stat.meta }}</b></header><strong>{{ stat.value }}</strong><p>{{ stat.label }}</p></article></section><section class="table-card glass"><header><h3>{{ activeTab === 'archived' ? 'Archivadas' : activeTab === 'recent' ? 'Recientes' : 'Todas' }} <span>Actualizado</span></h3><div><label class="filter-select"><span class="material-symbols-outlined">filter_list</span><select v-model="statusFilter"><option v-for="option in statusOptions" :key="option.key" :value="option.key">{{ option.label }}</option></select></label><label><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Filtrar por cliente o ID..." type="text"></label></div></header><div class="table-scroll"><table><thead><tr><th>ID Cotización</th><th>Vehículo / Marca</th><th>Fecha</th><th>Importe Total</th><th>Estado</th><th>Acciones</th></tr></thead><tbody><tr v-for="row in filteredQuotes" :key="row.id"><td><strong>{{ row.id }}</strong><small>{{ row.ref }}</small></td><td><div class="vehicle"><span class="material-symbols-outlined">directions_car</span><div><strong>{{ row.vehicle }}</strong><small>{{ row.brand }}</small></div></div></td><td>{{ row.date }}</td><td><strong>{{ money(row.amount) }}</strong></td><td><StatusBadge :status="row.status" size="sm" /></td><td><div class="row-actions"><button type="button" title="Ver detalle" @click="showDetail(row)"><span class="material-symbols-outlined">visibility</span></button><button v-if="row.status !== 'approved' && !row.archived" type="button" title="Marcar localmente" @click="confirmAction(row, 'Aprobar', { status: 'approved' })"><span class="material-symbols-outlined">check_circle</span></button><button v-if="row.status !== 'rejected' && !row.archived" type="button" title="Marcar localmente" @click="confirmAction(row, 'Rechazar', { status: 'rejected' }, 'danger')"><span class="material-symbols-outlined">cancel</span></button><button v-if="!row.archived" type="button" title="Archivar vista" @click="confirmAction(row, 'Archivar', { archived: true })"><span class="material-symbols-outlined">archive</span></button><button v-else type="button" title="Restaurar vista" @click="confirmAction(row, 'Restaurar', { archived: false })"><span class="material-symbols-outlined">unarchive</span></button></div></td></tr><tr v-if="!filteredQuotes.length"><td colspan="6" class="empty-row">No hay cotizaciones para los filtros seleccionados.</td></tr></tbody></table></div><footer><span>Mostrando {{ filteredQuotes.length }} de {{ visibleBase.length }} resultados</span><div><button disabled><span class="material-symbols-outlined">chevron_left</span></button><button class="active">1</button><button disabled><span class="material-symbols-outlined">chevron_right</span></button></div></footer></section></div></template>
+            <template #mobile><main class="mobile-main"><section class="mobile-title"><h1>Cotizaciones</h1><p>Solicitudes y estados comerciales del cliente.</p></section><section v-if="quoteCartCount > 0" class="temp-quote-cart glass"><header><div><span class="material-symbols-outlined">shopping_basket</span><strong>Cotización temporal</strong></div><b>{{ quoteCartCount }} producto(s)</b></header><article v-for="item in quoteCartItems" :key="item.id || item.sku"><div><strong>{{ item.name }}</strong><small>SKU: {{ item.sku || item.id }}</small></div><span>x{{ item.quantity || 1 }}</span></article><button type="button" @click="openNewQuote"><span class="material-symbols-outlined">add_task</span>Crear cotización local</button></section><section class="mobile-stats"><article v-for="stat in stats.slice(0, 3)" :key="stat.label" class="glass"><strong>{{ stat.value }}</strong><span>{{ stat.label }}</span></article></section><div class="mobile-tabs"><button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="activeTab = tab.key">{{ tab.label }}</button></div><label class="mobile-search glass"><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Buscar número o cliente" type="text"><select v-model="statusFilter" aria-label="Filtrar estado"><option v-for="option in statusOptions" :key="option.key" :value="option.key">{{ option.label }}</option></select></label><section class="mobile-list"><article v-for="quote in filteredQuotes" :key="quote.id" class="quote-card glass" @click="showDetail(quote)"><header><div><span :class="statusTones[quote.status]">{{ quote.id }}</span><h3>{{ quote.client }}</h3></div><StatusBadge :status="quote.status" size="sm" /></header><div class="quote-meta"><div><small>Referencia</small><strong>{{ quote.items[0]?.name || quote.ref }}</strong></div><div><small>Total</small><strong>{{ money(quote.amount) }}</strong></div></div><footer><span class="material-symbols-outlined">schedule</span><span>{{ quote.date }}</span><button v-if="quote.status !== 'approved' && !quote.archived" type="button" title="Marcar localmente" @click.stop="confirmAction(quote, 'Marcar localmente', { status: 'approved' })"><span class="material-symbols-outlined">check_circle</span></button><button v-if="quote.status !== 'rejected' && !quote.archived" type="button" title="Marcar localmente" @click.stop="confirmAction(quote, 'Marcar localmente', { status: 'rejected' }, 'danger')"><span class="material-symbols-outlined">cancel</span></button><button type="button" :title="quote.archived ? 'Restaurar vista' : 'Archivar vista'" @click.stop="quote.archived ? confirmAction(quote, 'Restaurar vista', { archived: false }) : confirmAction(quote, 'Archivar vista', { archived: true })"><span class="material-symbols-outlined">{{ quote.archived ? 'unarchive' : 'archive' }}</span></button></footer></article><p v-if="!filteredQuotes.length" class="mobile-empty">No hay cotizaciones para los filtros seleccionados.</p></section><PaginationControl :current-page="currentPage" :last-page="pageCount" :total="Number(quoteMeta.total) || filteredQuotes.length" :per-page="Number(quoteMeta.per_page) || perPage" :disabled="quoteStore.state.loading" compact @page-change="loadQuotesPage" /></main><button class="fab" type="button" @click="openNewQuote"><span class="material-symbols-outlined">add</span></button></template>
         </AppShell>
+        <section v-if="quoteCartCount > 0" class="quote-request-panel glass">
+            <header><div><span class="material-symbols-outlined">shopping_basket</span><strong>Cotización temporal</strong></div><b>{{ quoteCartCount }} producto(s) · {{ money(quoteCartTotal) }}</b></header>
+            <article v-for="item in quoteCartItems" :key="item.id || item.sku">
+                <div><strong>{{ item.name }}</strong><small>SKU: {{ item.sku || item.id }} · {{ item.brand }}</small></div>
+                <input :value="item.quantity || 1" min="1" :max="item.availableQty || undefined" type="number" aria-label="Cantidad" @change="updateTempQty(item, $event)">
+                <button type="button" aria-label="Quitar producto" @click="removeTempItem(item)"><span class="material-symbols-outlined">delete</span></button>
+            </article>
+            <footer><span>Total interno: {{ money(quoteCartTotal) }}</span><button type="button" @click="navigateTo('/catalogo')">Seguir cotizando</button><button type="button" @click="clearTempQuote">Vaciar</button><button type="button" @click="submitTemporaryRequest">Enviar solicitud</button></footer>
+        </section>
     </div>
 </template>
 
@@ -129,4 +230,7 @@ const openNewQuote = () => {
 @media(min-width:768px) and (max-width:1160px){.stats-grid{grid-template-columns:repeat(2,1fr)}.page-head{align-items:flex-start;flex-direction:column}.topbar label{display:none}.table-scroll table{min-width:980px}}
 .wrap{width:100%!important;max-width:none!important;margin:0!important;padding-top:18px!important}.stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:clamp(16px,1.4vw,24px)!important}.table-card{width:100%!important}.table-scroll table{width:100%!important}.desktop-main{padding-left:18px;padding-right:18px}.glass{background:linear-gradient(135deg,rgba(18,27,45,.76),rgba(9,14,26,.58))!important;border-color:rgba(125,211,252,.18)!important;box-shadow:0 24px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.07)}.stat-card,.table-card{animation:portal-enter .48s ease both;transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}.stat-card:hover,.table-card:hover{border-color:rgba(125,211,252,.28)!important;box-shadow:0 30px 90px rgba(56,189,248,.1),inset 0 1px 0 rgba(255,255,255,.08)}.mobile-main{padding-left:18px;padding-right:18px}@media(max-width:1180px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:767px){.mobile-main{padding-top:92px}.mobile-title{margin-bottom:28px}.mobile-search{height:64px;margin-bottom:28px}.quote-card{padding:24px}.fab{right:24px;width:68px;height:68px}}
 .page-head,.stat-card,.table-card{position:relative;overflow:hidden;border:1px solid rgba(125,211,252,.18);background:linear-gradient(135deg,rgba(28,43,64,.78),rgba(10,16,30,.62) 48%,rgba(45,38,72,.58)),radial-gradient(circle at 18% 0%,rgba(125,211,252,.18),transparent 34%),radial-gradient(circle at 92% 12%,rgba(200,160,240,.16),transparent 30%)!important;box-shadow:0 28px 90px rgba(0,0,0,.3),0 0 42px rgba(56,189,248,.075),inset 0 1px 0 rgba(255,255,255,.11)!important;backdrop-filter:blur(22px) saturate(155%)}.page-head{padding:26px 28px;border-radius:28px}.stat-card{border-radius:22px}.table-card{border-radius:26px}.table-card>header{background:linear-gradient(90deg,rgba(125,211,252,.16),rgba(200,160,240,.12),rgba(255,255,255,.03));border-bottom:1px solid rgba(255,255,255,.08)}.table-scroll thead th{background:rgba(255,255,255,.055)!important;color:#b7c6d4}.table-scroll tbody tr{background:linear-gradient(90deg,rgba(125,211,252,.035),transparent 55%,rgba(200,160,240,.025));transition:background .22s ease}.table-scroll tbody tr:hover{background:rgba(125,211,252,.075)}.stat-card::after,.table-card::after,.page-head::after{position:absolute;right:-28px;top:-28px;width:130px;height:130px;border-radius:999px;content:'';background:rgba(125,211,252,.13);filter:blur(12px);pointer-events:none}.stat-card:nth-child(2)::after{background:rgba(200,160,240,.15)}.stat-card:nth-child(3)::after{background:rgba(110,231,183,.12)}.page-head,.stat-card,.table-card{animation:portal-enter .48s ease both}.stat-card:nth-child(2),.table-card{animation-delay:.08s}.stat-card:nth-child(3),.stat-card:nth-child(4){animation-delay:.14s}.quote-head-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}.tabs button.active,.mobile-tabs button.active{background:rgba(125,211,252,.18)!important;color:#7dd3fc!important}.new-quote{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(125,211,252,.28);border-radius:999px;background:rgba(125,211,252,.12);color:#9ee8ff;font-weight:900;padding:11px 16px;cursor:pointer}.filter-select select,.mobile-search select{border:0;outline:0;background:transparent;color:#e0e8f0;font:inherit}.filter-select option,.mobile-search option{background:#111827;color:#e0e8f0}.row-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.row-actions button{display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(125,211,252,.16);border-radius:10px;background:rgba(255,255,255,.04);color:#a8dff5;cursor:pointer}.row-actions button span{font-size:18px}.empty-row,.mobile-empty{padding:28px!important;text-align:center;color:#a0b4c4}.status.rejected,.pill.rejected{color:#ff9b9b}.mobile-tabs{display:none}.quote-card footer button{margin-left:auto;border:0;background:transparent;color:#7dd3fc}.quote-card{cursor:pointer}@media(max-width:767px){.mobile-tabs{display:flex;gap:8px;margin:-10px 0 18px;overflow:auto}.mobile-tabs button{white-space:nowrap;border:1px solid rgba(125,211,252,.16);border-radius:999px;background:rgba(255,255,255,.04);color:#a0b4c4;padding:9px 12px;font-weight:900}.mobile-search select{max-width:150px;font-size:12px}.quote-card .rejected{color:#ff9b9b}.quote-card footer{align-items:center}.quote-card footer button span{font-size:24px!important;margin:0!important}}
+@media(max-width:767px){.quotes-page{overflow-x:hidden}.mobile-main{max-width:100%;padding:88px 14px 128px!important;display:grid;gap:14px;overflow-x:hidden}.mobile-title{margin-bottom:2px!important}.mobile-title h1{font-size:clamp(24px,7vw,30px)!important;line-height:1.05}.mobile-title p{font-size:14px!important;line-height:1.35}.mobile-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.mobile-stats article{min-width:0;padding:10px;border-radius:16px}.mobile-stats strong{display:block;overflow:hidden;color:#7dd3fc;font-size:clamp(14px,4.5vw,18px);text-overflow:ellipsis;white-space:nowrap}.mobile-stats span{display:block;margin-top:3px;overflow:hidden;color:#a0b4c4;font-size:9px;font-weight:900;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}.mobile-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0!important}.mobile-tabs button{min-height:38px;padding:8px 6px!important;border-radius:12px!important;font-size:10px!important}.mobile-search{height:auto!important;display:grid!important;grid-template-columns:auto minmax(0,1fr);gap:8px!important;margin:0!important;padding:10px!important;border-radius:16px!important}.mobile-search span:first-child{font-size:22px!important}.mobile-search input{font-size:14px!important}.mobile-search select{grid-column:1/-1;min-width:0;width:100%;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(10,16,30,.62);color:#e0e8f0;padding:9px 10px}.mobile-list{gap:12px!important}.quote-card{padding:14px!important;border-radius:18px!important}.quote-card header{gap:10px}.quote-card header>div{min-width:0}.quote-card header span{margin-bottom:4px!important;font-size:10px!important}.quote-card h3{display:-webkit-box;max-width:100%!important;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:16px!important;line-height:1.25!important}.quote-meta{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin-top:12px}.quote-meta strong{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:13px!important}.quote-meta small{font-size:10px}.quote-card footer{gap:8px;margin-top:12px}.quote-card footer>span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.quote-card footer button{width:34px;height:34px;min-width:34px;border-radius:10px}.fab{right:16px!important;bottom:94px!important;width:54px!important;height:54px!important}.mobile-empty{padding:16px;text-align:center;color:#a0b4c4}.pagination-control{margin-top:0}}
+@media(max-width:767px){.temp-quote-cart{display:grid;gap:10px;padding:14px;border-radius:18px}.temp-quote-cart header{display:flex;align-items:center;justify-content:space-between;gap:10px}.temp-quote-cart header>div{display:flex;align-items:center;gap:8px;min-width:0}.temp-quote-cart header strong{color:#fff;font-size:14px}.temp-quote-cart header b{flex:0 0 auto;color:#7dd3fc;font-size:12px}.temp-quote-cart article{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid rgba(125,211,252,.12);border-radius:12px;background:rgba(255,255,255,.035);padding:9px 10px}.temp-quote-cart article strong{display:-webkit-box;overflow:hidden;color:#e0e8f0;font-size:13px;line-height:1.25;-webkit-box-orient:vertical;-webkit-line-clamp:2}.temp-quote-cart article small{display:block;overflow:hidden;margin-top:3px;color:#7f98ad;font-size:10px;font-weight:900;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}.temp-quote-cart article span{color:#9ee8ff;font-weight:900}.temp-quote-cart button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(125,211,252,.28);border-radius:14px;background:rgba(125,211,252,.14);color:#9ee8ff;padding:10px 12px;font-weight:900}}
+.quote-request-panel{position:fixed;right:22px;bottom:22px;z-index:85;display:grid;gap:10px;width:min(520px,calc(100vw - 44px));max-height:min(62vh,560px);overflow:auto;padding:16px;border-radius:22px;color:#e0e8f0}.quote-request-panel header,.quote-request-panel footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.quote-request-panel header>div{display:flex;align-items:center;gap:8px}.quote-request-panel header span{color:#7dd3fc}.quote-request-panel header strong{color:#fff}.quote-request-panel header b,.quote-request-panel footer span{color:#9ee8ff;font-size:12px}.quote-request-panel article{display:grid;grid-template-columns:minmax(0,1fr) 76px auto;gap:10px;align-items:center;padding:10px;border:1px solid rgba(125,211,252,.14);border-radius:14px;background:rgba(255,255,255,.04)}.quote-request-panel article strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.quote-request-panel article small{display:block;margin-top:3px;color:#8fa6b8;font-size:10px;font-weight:900;text-transform:uppercase}.quote-request-panel input{width:100%;border:1px solid rgba(125,211,252,.22);border-radius:12px;background:rgba(10,16,30,.72);color:#e0e8f0;padding:8px 10px}.quote-request-panel button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid rgba(125,211,252,.28);border-radius:12px;background:rgba(125,211,252,.12);color:#9ee8ff;padding:9px 12px;font-weight:900}.quote-request-panel footer button:last-child{background:linear-gradient(135deg,#7dd3fc,#67bde8);color:#082033}@media(max-width:767px){.mobile-main>.temp-quote-cart{display:none!important}.quote-request-panel{left:12px;right:12px;bottom:92px;width:auto;max-height:46vh;padding:12px;border-radius:18px}.quote-request-panel article{grid-template-columns:minmax(0,1fr) 62px auto}.quote-request-panel footer{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}.quote-request-panel footer span{grid-column:1/-1}.quote-request-panel footer button:last-child{grid-column:1/-1}}
 </style>
