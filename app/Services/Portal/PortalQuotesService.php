@@ -60,10 +60,12 @@ class PortalQuotesService
                 'amount' => $amount,
                 'status' => 'pending',
                 'archived' => false,
+                'observations' => $payload['observations'] ?? $payload['comments'] ?? '',
+                'comments' => $payload['comments'] ?? $payload['observations'] ?? '',
                 'items' => $items,
             ],
-            'message' => 'Cotización creada correctamente.',
-        ], ['source' => 'mock', 'persisted' => false]);
+            'message' => 'Solicitud temporal preparada. No se creo documento real en ERP.',
+        ], ['source' => 'local-temporary', 'persisted' => false]);
     }
 
     private function paginate(array $items, int $page, int $perPage): array

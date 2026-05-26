@@ -152,7 +152,7 @@ const addToQuote = (product) => {
 };
 
 const goToQuotes = () => {
-    navigateTo('/cotizaciones');
+    navigateTo('/cotizaciones/nueva');
 };
 
 const hasProductImage = (product) => product.image && !product.imageBroken;

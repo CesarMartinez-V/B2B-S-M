@@ -12,7 +12,7 @@ const props = defineProps({
     activeRoute: { type: String, required: true },
     items: { type: Array, default: () => portalNavItems },
     ctaLabel: { type: String, default: 'Nueva Cotización' },
-    ctaHref: { type: String, default: '/cotizaciones' },
+    ctaHref: { type: String, default: '/cotizaciones/nueva' },
     ctaIcon: { type: String, default: 'add_circle' },
     supportHref: { type: String, default: '/panel' },
     logoutHref: { type: String, default: '/login' },

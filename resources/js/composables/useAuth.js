@@ -77,12 +77,19 @@ export const useAuth = () => {
         return Date.parse(session.value.expiresAt) > Date.now();
     });
 
-    const login = async ({ identity }) => {
+    const login = async ({ identity, password = '' }) => {
         const previousClientCode = session.value?.client?.code || '';
-        const response = await apiClient.post('/api/portal/auth/identity', { identity });
+        const response = await apiClient.post('/api/portal/auth/identity', {
+            identity,
+            ...(password ? { password } : {}),
+        });
 
         if (!response?.data?.authenticated || !response.data.token) {
-            return { authenticated: false };
+            return {
+                authenticated: false,
+                requiresPassword: Boolean(response?.data?.requiresPassword),
+                message: response?.data?.message || '',
+            };
         }
 
         const nextSession = {

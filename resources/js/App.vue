@@ -17,6 +17,7 @@ import InvoiceHistoryPage from './pages/InvoiceHistoryPage.vue';
 import OrdersPage from './pages/OrdersPage.vue';
 import PortalPage from './pages/PortalPage.vue';
 import ProfilePage from './pages/ProfilePage.vue';
+import NewQuotePage from './pages/NewQuotePage.vue';
 import QuotesPage from './pages/QuotesPage.vue';
 
 const { currentPath } = usePortalNavigation();
@@ -32,6 +33,8 @@ const publicPages = {
     '/pedidos': OrdersPage,
     '/estado-de-cuenta': AccountStatusPage,
     '/cotizaciones': QuotesPage,
+    '/cotizaciones/nueva': NewQuotePage,
+    '/quotes/create': NewQuotePage,
     '/perfil': ProfilePage,
     '/historial-facturas': InvoiceHistoryPage,
 };
@@ -43,6 +46,8 @@ const portalPages = {
     '/pedidos': 'orders',
     '/estado-de-cuenta': 'accountStatus',
     '/cotizaciones': 'quotes',
+    '/cotizaciones/nueva': 'quotes',
+    '/quotes/create': 'quotes',
     '/perfil': 'dashboard',
     '/historial-facturas': 'accountStatus',
 };

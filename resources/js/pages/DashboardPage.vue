@@ -41,7 +41,7 @@ const chartBars = computed(() => (chart.value.months ?? []).map((label, index) =
 const runAction = (action) => {
     const label = typeof action === 'string' ? action : action.label;
     const href = typeof action === 'object' ? action.href : null;
-    const routes = { Historial: goToInvoices, Facturas: goToInvoices, Catálogo: goToCatalog, Catalogo: goToCatalog, 'Nueva cotización': goToCatalog, 'Nueva cotizacion': goToCatalog, 'Estado de cuenta': () => navigateTo('/estado-de-cuenta'), Rastreo: goToOrders, Cotizar: goToQuotes, Pedido: goToOrders };
+    const routes = { Historial: goToInvoices, Facturas: goToInvoices, Catálogo: goToCatalog, Catalogo: goToCatalog, 'Nueva cotización': () => navigateTo('/cotizaciones/nueva'), 'Nueva cotizacion': () => navigateTo('/cotizaciones/nueva'), 'Estado de cuenta': () => navigateTo('/estado-de-cuenta'), Rastreo: goToOrders, Cotizar: goToQuotes, Pedido: goToOrders };
 
     if (href) {
         navigateTo(href);

@@ -51,6 +51,7 @@ const search = ref('');
 const statusFilter = ref('all');
 const currentPage = ref(1);
 const perPage = 20;
+const sendingTemporaryRequest = ref(false);
 
 const quoteParams = (page = currentPage.value) => ({
     page,
@@ -113,23 +114,45 @@ const stats = computed(() => {
     ];
 });
 
-const quoteDetail = (quote) => [
-    `${quote.id} - ${statusLabels[normalizeStatus(quote.status)]}`,
-    `Cliente: ${quote.client}`,
-    `Vehículo: ${quote.vehicle}`,
-    `Marca: ${quote.brand}`,
-    `Fecha: ${quote.date}`,
-    `Total: ${formatCurrency(quote.amount)}`,
-    `Items: ${quote.items.map((item) => `${item.qty} x ${item.name}`).join(', ')}`,
-].join('\n');
-const showDetail = (quote) => openModal({ title: 'Detalle de cotización', message: quoteDetail(quote), icon: 'request_quote', confirmText: 'Cerrar' });
+const quoteObservations = (quote) => quote.observations ?? quote.comments ?? quote.note ?? '';
+const quoteDetailRows = (quote) => [
+    { label: 'Número', value: quote.id },
+    { label: 'Cliente', value: quote.client || 'Cliente B2B' },
+    { label: 'Fecha', value: quote.date || 'Ahora' },
+    { label: 'Estado', value: statusLabels[normalizeStatus(quote.status)] || quote.status || 'Pendiente' },
+    { label: 'Total', value: formatCurrency(quote.amount) },
+    { label: 'Origen', value: quote.local ? 'Solicitud local temporal' : 'Cotización ERP B2B' },
+];
+const quoteDetailItems = (quote) => (quote.items || []).map((item) => ({
+    id: item.id,
+    sku: item.sku,
+    name: item.name || item.title || item.sku || 'Producto',
+    qty: item.qty || item.quantity || 1,
+    priceLabel: formatCurrency(Number(item.price ?? item.priceValue ?? 0) || 0),
+}));
+const showDetail = (quote) => openModal({
+    title: 'Detalle de cotización',
+    message: quote.local ? 'Solicitud temporal / No enviada al ERP.' : 'Cotización real sincronizada desde Fastevo B2B.',
+    icon: 'request_quote',
+    confirmText: 'Cerrar',
+    size: 'lg',
+    detail: {
+        badge: quote.local ? 'Temporal · No enviada al ERP' : 'ERP B2B',
+        rows: quoteDetailRows(quote),
+        items: quoteDetailItems(quote),
+        observations: quoteObservations(quote) || 'Sin observaciones.',
+    },
+});
 const tempCartLines = computed(() => quoteCartItems.value.map((item) => `${item.quantity || 1} x ${item.name} (${item.sku || item.id}) - ${formatCurrency(Number(item.priceValue || 0) * Number(item.quantity || 1))}`));
 const updateTempQty = (item, event) => {
     const qty = Number(event.target.value) || 1;
     if (!quoteCart.updateQty(item.id || item.sku, qty)) {
         event.target.value = item.quantity || 1;
-        info('La cantidad supera la disponibilidad registrada para este producto.', 'Cantidad no disponible');
+        info('La cantidad maxima para cotizar es 100.', 'Cantidad no disponible');
+        return;
     }
+
+    event.target.value = item.quantity || 1;
 };
 const removeTempItem = (item) => {
     quoteCart.removeItem(item.id || item.sku);
@@ -146,6 +169,8 @@ const clearTempQuote = () => askConfirm({
     },
 });
 const submitTemporaryRequest = () => {
+    if (sendingTemporaryRequest.value) return;
+
     const cart = quoteService.getTemporaryCart(quoteCart.items.value);
     if (!cart?.items?.length) {
         info('Agrega productos desde el catálogo antes de preparar la solicitud.');
@@ -159,10 +184,12 @@ const submitTemporaryRequest = () => {
         confirmText: 'Preparar solicitud',
         cancelText: 'Cancelar',
         onConfirm: () => {
+            sendingTemporaryRequest.value = true;
             const quote = quoteService.submitTemporaryRequest(quoteService.createQuoteFromCart(cart));
-            quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id)];
+            quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id && item.temp_quote_id !== quote.temp_quote_id && item.cart_signature !== quote.cart_signature)];
             quoteCart.clear();
             activeTab.value = 'all';
+            sendingTemporaryRequest.value = false;
             success('Solicitud preparada. No se creó documento real en ERP.');
         },
     });
@@ -179,28 +206,7 @@ const confirmAction = (quote, action, changes, tone = 'primary') => askConfirm({
     onConfirm: () => updateQuote(quote, changes, `${quote.id} actualizada correctamente.`),
 });
 const openNewQuote = () => {
-    const cart = quoteService.getTemporaryCart(quoteCart.items.value);
-
-    if (!cart) {
-        openModal({ title: 'Nueva cotización', message: 'Primero selecciona productos desde el catálogo. Te llevaremos al catálogo para preparar la cotización temporal.', icon: 'add_shopping_cart', confirmText: 'Ir al catálogo', cancelText: 'Cerrar', onConfirm: () => navigateTo('/catalogo') });
-        info('Selecciona productos del catálogo para cotizar.');
-        return;
-    }
-
-    openModal({
-        title: 'Nueva cotización',
-        message: `Se creará una cotización local con ${cart.items.length} artículos del carrito temporal.`,
-        icon: 'add',
-        confirmText: 'Crear cotización',
-        cancelText: 'Cancelar',
-        onConfirm: () => {
-            const quote = quoteService.addLocalQuote(quoteService.createQuoteFromCart(cart));
-            quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id)];
-            quoteCart.clear();
-            activeTab.value = 'all';
-            success(`${quote.id} creada desde carrito temporal.`);
-        },
-    });
+    navigateTo('/cotizaciones/nueva');
 };
 </script>
 
@@ -214,10 +220,10 @@ const openNewQuote = () => {
             <header><div><span class="material-symbols-outlined">shopping_basket</span><strong>Cotización temporal</strong></div><b>{{ quoteCartCount }} producto(s) · {{ money(quoteCartTotal) }}</b></header>
             <article v-for="item in quoteCartItems" :key="item.id || item.sku">
                 <div><strong>{{ item.name }}</strong><small>SKU: {{ item.sku || item.id }} · {{ item.brand }}</small></div>
-                <input :value="item.quantity || 1" min="1" :max="item.availableQty || undefined" type="number" aria-label="Cantidad" @change="updateTempQty(item, $event)">
+                <input :value="item.quantity || 1" min="1" max="100" type="number" aria-label="Cantidad" @change="updateTempQty(item, $event)">
                 <button type="button" aria-label="Quitar producto" @click="removeTempItem(item)"><span class="material-symbols-outlined">delete</span></button>
             </article>
-            <footer><span>Total interno: {{ money(quoteCartTotal) }}</span><button type="button" @click="navigateTo('/catalogo')">Seguir cotizando</button><button type="button" @click="clearTempQuote">Vaciar</button><button type="button" @click="submitTemporaryRequest">Enviar solicitud</button></footer>
+            <footer><span>Total interno: {{ money(quoteCartTotal) }}</span><button type="button" @click="navigateTo('/catalogo')">Seguir cotizando</button><button type="button" @click="clearTempQuote">Vaciar</button><button type="button" :disabled="sendingTemporaryRequest" @click="submitTemporaryRequest">Enviar solicitud</button></footer>
         </section>
     </div>
 </template>

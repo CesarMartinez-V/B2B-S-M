@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { nextTick, reactive, ref } from 'vue';
 import { useAuth } from '../composables/useAuth.js';
 import { useModal } from '../composables/useModal.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
@@ -12,26 +12,58 @@ const { login } = useAuth();
 const { openModal } = useModal();
 const { error, success } = useToast();
 const loading = ref(false);
+const passwordFlowOpen = ref(false);
+const checkingPasswordIdentity = ref(false);
+const creatingPassword = ref(false);
+const showLoginPassword = ref(true);
+const showPasswordText = ref(false);
+const desktopPasswordInput = ref(null);
+const mobilePasswordInput = ref(null);
+const passwordStep = ref('identity');
+const passwordMessage = ref('');
+const passwordClient = ref(null);
 
 const form = reactive({
     identity: '',
+    password: '',
 });
 
 const mobileForm = reactive({
     identity: '',
+    password: '',
 });
 
 const errors = reactive({
     identity: '',
     mobileIdentity: '',
+    loginPassword: '',
+    mobileLoginPassword: '',
+    createIdentity: '',
+    newPassword: '',
+    passwordConfirmation: '',
+});
+
+const passwordForm = reactive({
+    identity: '',
+    password: '',
+    password_confirmation: '',
 });
 
 const validate = (values, mode = 'desktop') => {
     const identityKey = mode === 'mobile' ? 'mobileIdentity' : 'identity';
+    const passwordKey = mode === 'mobile' ? 'mobileLoginPassword' : 'loginPassword';
 
-    errors[identityKey] = values.identity.trim() ? '' : 'Ingresa tu número de identidad o RTN.';
+    errors[identityKey] = values.identity.trim() ? '' : 'Ingrese su número de identidad o RTN.';
+    errors[passwordKey] = '';
 
     return !errors[identityKey];
+};
+
+const focusPasswordInput = (mode = 'desktop') => {
+    nextTick(() => {
+        const input = mode === 'mobile' ? mobilePasswordInput.value : desktopPasswordInput.value;
+        input?.focus?.();
+    });
 };
 
 const handleLogin = async (mode = 'desktop') => {
@@ -45,10 +77,21 @@ const handleLogin = async (mode = 'desktop') => {
     loading.value = true;
 
     try {
-        const result = await login({ identity: values.identity.trim() });
+        const result = await login({ identity: values.identity.trim(), password: values.password });
 
         if (!result.authenticated) {
-            error('No encontramos un cliente B2B con ese número de identidad o RTN.');
+            if (result.requiresPassword) {
+                showLoginPassword.value = true;
+                const passwordKey = mode === 'mobile' ? 'mobileLoginPassword' : 'loginPassword';
+                errors[passwordKey] = result.message === 'Identidad o contrasena incorrecta.'
+                    ? 'Identidad o contraseña incorrecta.'
+                    : 'Este cliente ya tiene contraseña. Ingrésela para continuar.';
+                focusPasswordInput(mode);
+                error(errors[passwordKey]);
+                return;
+            }
+
+            error(result.message || 'No encontramos un cliente B2B con ese número de identidad o RTN.');
             return;
         }
 
@@ -58,6 +101,137 @@ const handleLogin = async (mode = 'desktop') => {
         error('No se pudo validar la identidad en este momento.');
     } finally {
         loading.value = false;
+    }
+};
+
+const postPortalAuth = async (endpoint, payload) => {
+    const response = await window.fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+    const contentType = response.headers.get('Content-Type') || '';
+    const data = contentType.includes('application/json') ? await response.json() : null;
+
+    return { ok: response.ok, status: response.status, data };
+};
+
+const togglePasswordFlow = () => {
+    passwordFlowOpen.value = !passwordFlowOpen.value;
+    if (passwordFlowOpen.value && !passwordForm.identity.trim()) {
+        passwordForm.identity = form.identity.trim() || mobileForm.identity.trim();
+    }
+};
+
+const resetPasswordFlow = () => {
+    passwordStep.value = 'identity';
+    passwordMessage.value = '';
+    passwordClient.value = null;
+    passwordForm.password = '';
+    passwordForm.password_confirmation = '';
+    errors.createIdentity = '';
+    errors.newPassword = '';
+    errors.passwordConfirmation = '';
+};
+
+const checkPasswordIdentity = async () => {
+    resetPasswordFlow();
+    errors.createIdentity = passwordForm.identity.trim() ? '' : 'Ingresa tu identidad o RTN.';
+
+    if (errors.createIdentity) {
+        error(errors.createIdentity);
+        return;
+    }
+
+    checkingPasswordIdentity.value = true;
+
+    try {
+        const result = await postPortalAuth('/api/portal/auth/check-identity', { identity: passwordForm.identity.trim() });
+        const data = result.data?.data || {};
+
+        if (!data.exists) {
+            passwordMessage.value = 'No encontramos un cliente B2B con ese número de identidad o RTN.';
+            error(passwordMessage.value);
+            return;
+        }
+
+        passwordClient.value = data.client || null;
+
+        if (data.hasPassword) {
+            passwordMessage.value = 'Este cliente ya tiene contraseña creada. Inicie sesión.';
+            showLoginPassword.value = true;
+            form.identity = passwordForm.identity.trim();
+            mobileForm.identity = passwordForm.identity.trim();
+            focusPasswordInput();
+            passwordStep.value = 'blocked';
+            return;
+        }
+
+        if (!data.canCreatePassword) {
+            passwordMessage.value = 'No se puede crear contraseña para esta identidad en este momento.';
+            passwordStep.value = 'blocked';
+            return;
+        }
+
+        passwordMessage.value = 'Identidad validada. Cree una contraseña para iniciar sesión en el portal.';
+        passwordStep.value = 'password';
+    } catch {
+        error('No se pudo verificar la identidad en este momento.');
+    } finally {
+        checkingPasswordIdentity.value = false;
+    }
+};
+
+const validatePasswordCreation = () => {
+    errors.newPassword = passwordForm.password.length >= 8 ? '' : 'Mínimo 8 caracteres.';
+    errors.passwordConfirmation = passwordForm.password_confirmation === passwordForm.password ? '' : 'La confirmación no coincide.';
+
+    if (passwordForm.password && (!/[A-Za-z]/.test(passwordForm.password) || !/[0-9]/.test(passwordForm.password))) {
+        errors.newPassword = 'Debe incluir al menos una letra y un número.';
+    }
+
+    return !errors.newPassword && !errors.passwordConfirmation;
+};
+
+const submitPasswordCreation = async () => {
+    if (!validatePasswordCreation()) {
+        error('Revise los requisitos de contraseña.');
+        return;
+    }
+
+    creatingPassword.value = true;
+
+    try {
+        const result = await postPortalAuth('/api/portal/auth/create-password', {
+            identity: passwordForm.identity.trim(),
+            password: passwordForm.password,
+            password_confirmation: passwordForm.password_confirmation,
+        });
+        const data = result.data?.data || {};
+
+        if (!result.ok || !data.created) {
+            passwordMessage.value = data.message || 'No se pudo crear la contraseña.';
+            error(passwordMessage.value);
+            return;
+        }
+
+        success(data.message || 'Contraseña creada correctamente.');
+        passwordMessage.value = 'Contraseña creada correctamente. Ahora puede iniciar sesión.';
+        passwordStep.value = 'success';
+        form.identity = passwordForm.identity.trim();
+        mobileForm.identity = passwordForm.identity.trim();
+        showLoginPassword.value = true;
+        passwordFlowOpen.value = false;
+        focusPasswordInput();
+        passwordForm.password = '';
+        passwordForm.password_confirmation = '';
+    } catch {
+        error('No se pudo crear la contraseña en este momento.');
+    } finally {
+        creatingPassword.value = false;
     }
 };
 
@@ -120,7 +294,71 @@ const openHelp = (type) => {
                         <small v-if="errors.identity" class="login-error">{{ errors.identity }}</small>
                     </label>
 
-                    <p class="login-temp-note">Acceso temporal por identidad. En producción se agregará una validación adicional.</p>
+                    <label v-if="showLoginPassword" class="desktop-field">
+                        <span>Contraseña</span>
+                        <span class="desktop-input liquid-glass input-glow">
+                            <span class="material-symbols-outlined">lock</span>
+                            <input ref="desktopPasswordInput" v-model="form.password" :type="showPasswordText ? 'text' : 'password'" placeholder="Ingrese su contraseña" autocomplete="current-password">
+                            <button class="password-visibility" type="button" :aria-label="showPasswordText ? 'Ocultar contraseña' : 'Mostrar contraseña'" @click="showPasswordText = !showPasswordText">
+                                <span class="material-symbols-outlined">{{ showPasswordText ? 'visibility_off' : 'visibility' }}</span>
+                            </button>
+                        </span>
+                        <small v-if="errors.loginPassword" class="login-error">{{ errors.loginPassword }}</small>
+                    </label>
+
+                    <p class="login-temp-note">Ingrese con su identidad o RTN. Si ya creó una contraseña, colóquela para acceder.</p>
+
+                    <section class="password-create-box">
+                        <button type="button" class="password-create-toggle" @click="togglePasswordFlow">
+                            <span class="material-symbols-outlined">lock_reset</span>
+                            <span>Crear contraseña</span>
+                        </button>
+
+                        <div v-if="passwordFlowOpen" class="password-create-panel">
+                            <p class="password-security-note">Cree una contraseña para su cliente B2B registrado por identidad/RTN.</p>
+
+                            <label class="password-field">
+                                <span>Identidad o RTN</span>
+                                <input v-model="passwordForm.identity" type="text" inputmode="numeric" autocomplete="off" placeholder="0801**********">
+                                <small v-if="errors.createIdentity" class="login-error">{{ errors.createIdentity }}</small>
+                            </label>
+
+                            <button type="button" class="password-action" :disabled="checkingPasswordIdentity" @click="checkPasswordIdentity">
+                                {{ checkingPasswordIdentity ? 'Verificando...' : 'Verificar identidad' }}
+                            </button>
+
+                            <div v-if="passwordClient" class="password-client-card">
+                                <strong>{{ passwordClient.name }}</strong>
+                                <span>{{ passwordClient.code }} · {{ passwordClient.vatNumberMasked }}</span>
+                            </div>
+
+                            <p v-if="passwordMessage" class="password-flow-message">{{ passwordMessage }}</p>
+
+                            <div v-if="passwordStep === 'password'" class="password-fields-stack">
+                                <label class="password-field">
+                                    <span>Nueva contraseña</span>
+                                    <input v-model="passwordForm.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+                                    <small v-if="errors.newPassword" class="login-error">{{ errors.newPassword }}</small>
+                                </label>
+
+                                <label class="password-field">
+                                    <span>Confirmar contraseña</span>
+                                    <input v-model="passwordForm.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita la contraseña">
+                                    <small v-if="errors.passwordConfirmation" class="login-error">{{ errors.passwordConfirmation }}</small>
+                                </label>
+
+                                <ul class="password-rules">
+                                    <li>Mínimo 8 caracteres</li>
+                                    <li>Al menos una letra</li>
+                                    <li>Al menos un número</li>
+                                </ul>
+
+                                <button type="button" class="password-action password-action--primary" :disabled="creatingPassword" @click="submitPasswordCreation">
+                                    {{ creatingPassword ? 'Creando...' : 'Crear contraseña' }}
+                                </button>
+                            </div>
+                        </div>
+                    </section>
 
                     <label class="desktop-remember">
                         <span class="checkbox-wrap">
@@ -183,7 +421,71 @@ const openHelp = (type) => {
                             <small v-if="errors.mobileIdentity" class="login-error">{{ errors.mobileIdentity }}</small>
                         </label>
 
-                        <p class="login-temp-note">Acceso temporal por identidad. En producción se agregará una validación adicional.</p>
+                        <label v-if="showLoginPassword" class="mobile-field">
+                            <span>Contraseña</span>
+                            <span class="mobile-input glass-input">
+                                <span class="material-symbols-outlined">lock</span>
+                                <input ref="mobilePasswordInput" v-model="mobileForm.password" :type="showPasswordText ? 'text' : 'password'" placeholder="Ingrese su contraseña" autocomplete="current-password">
+                                <button class="password-visibility" type="button" :aria-label="showPasswordText ? 'Ocultar contraseña' : 'Mostrar contraseña'" @click="showPasswordText = !showPasswordText">
+                                    <span class="material-symbols-outlined">{{ showPasswordText ? 'visibility_off' : 'visibility' }}</span>
+                                </button>
+                            </span>
+                            <small v-if="errors.mobileLoginPassword" class="login-error">{{ errors.mobileLoginPassword }}</small>
+                        </label>
+
+                        <p class="login-temp-note">Ingrese con su identidad o RTN. Si ya creó una contraseña, colóquela para acceder.</p>
+
+                        <section class="password-create-box password-create-box--mobile">
+                            <button type="button" class="password-create-toggle" @click="togglePasswordFlow">
+                                <span class="material-symbols-outlined">lock_reset</span>
+                                <span>Crear contraseña</span>
+                            </button>
+
+                            <div v-if="passwordFlowOpen" class="password-create-panel">
+                                <p class="password-security-note">Cree una contraseña para su cliente B2B registrado por identidad/RTN.</p>
+
+                                <label class="password-field">
+                                    <span>Identidad o RTN</span>
+                                    <input v-model="passwordForm.identity" type="text" inputmode="numeric" autocomplete="off" placeholder="0801**********">
+                                    <small v-if="errors.createIdentity" class="login-error">{{ errors.createIdentity }}</small>
+                                </label>
+
+                                <button type="button" class="password-action" :disabled="checkingPasswordIdentity" @click="checkPasswordIdentity">
+                                    {{ checkingPasswordIdentity ? 'Verificando...' : 'Verificar identidad' }}
+                                </button>
+
+                                <div v-if="passwordClient" class="password-client-card">
+                                    <strong>{{ passwordClient.name }}</strong>
+                                    <span>{{ passwordClient.code }} · {{ passwordClient.vatNumberMasked }}</span>
+                                </div>
+
+                                <p v-if="passwordMessage" class="password-flow-message">{{ passwordMessage }}</p>
+
+                                <div v-if="passwordStep === 'password'" class="password-fields-stack">
+                                    <label class="password-field">
+                                        <span>Nueva contraseña</span>
+                                        <input v-model="passwordForm.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+                                        <small v-if="errors.newPassword" class="login-error">{{ errors.newPassword }}</small>
+                                    </label>
+
+                                    <label class="password-field">
+                                        <span>Confirmar contraseña</span>
+                                        <input v-model="passwordForm.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita la contraseña">
+                                        <small v-if="errors.passwordConfirmation" class="login-error">{{ errors.passwordConfirmation }}</small>
+                                    </label>
+
+                                    <ul class="password-rules">
+                                        <li>Mínimo 8 caracteres</li>
+                                        <li>Al menos una letra</li>
+                                        <li>Al menos un número</li>
+                                    </ul>
+
+                                    <button type="button" class="password-action password-action--primary" :disabled="creatingPassword" @click="submitPasswordCreation">
+                                        {{ creatingPassword ? 'Creando...' : 'Crear contraseña' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
 
                         <label class="mobile-remember">
                             <input id="remember-mobile" type="checkbox">
@@ -445,6 +747,142 @@ const openHelp = (type) => {
     line-height: 1.5;
 }
 
+.password-create-box {
+    display: grid;
+    gap: 12px;
+    margin-top: -8px;
+}
+
+.password-create-toggle,
+.password-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid rgba(125, 211, 252, 0.3);
+    border-radius: 16px;
+    color: #dff7ff;
+    background: rgba(8, 18, 32, 0.72);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.password-create-toggle:hover,
+.password-action:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(125, 211, 252, 0.7);
+    background: rgba(14, 33, 56, 0.84);
+}
+
+.password-create-toggle .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.password-create-panel {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+    background: linear-gradient(135deg, rgba(7, 17, 31, 0.9), rgba(15, 34, 58, 0.74));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.password-security-note,
+.password-flow-message {
+    margin: 0;
+    color: #a9bdca;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.password-flow-message {
+    color: #bae6fd;
+}
+
+.password-field,
+.password-fields-stack {
+    display: grid;
+    gap: 8px;
+}
+
+.password-field > span {
+    color: #a0b4c4;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.password-field input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    outline: none;
+    color: #f8fafc;
+    background: rgba(2, 6, 23, 0.58);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.password-field input:focus {
+    border-color: rgba(125, 211, 252, 0.65);
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.12);
+}
+
+.password-action {
+    width: 100%;
+}
+
+.password-action--primary {
+    color: #07111f;
+    background: linear-gradient(135deg, #7dd3fc, #c4b5fd);
+    border-color: rgba(255, 255, 255, 0.36);
+}
+
+.password-action:disabled {
+    cursor: wait;
+    opacity: 0.66;
+}
+
+.password-client-card {
+    display: grid;
+    gap: 3px;
+    padding: 10px 12px;
+    border: 1px solid rgba(34, 197, 94, 0.22);
+    border-radius: 16px;
+    background: rgba(20, 83, 45, 0.2);
+}
+
+.password-client-card strong {
+    color: #dcfce7;
+    font-size: 12px;
+}
+
+.password-client-card span {
+    color: #bbf7d0;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.password-rules {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding-left: 18px;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 700;
+}
+
 .desktop-field > span:first-child,
 .desktop-field-row > span:first-child {
     color: #a0b4c4;
@@ -509,6 +947,36 @@ const openHelp = (type) => {
     margin-right: 0;
     color: rgba(160, 180, 196, 0.5);
     cursor: pointer;
+}
+
+.password-visibility {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin-left: 10px;
+    border: 0;
+    border-radius: 999px;
+    color: rgba(160, 180, 196, 0.72);
+    background: transparent;
+    cursor: pointer;
+    transition: color 180ms ease, background 180ms ease;
+}
+
+.password-visibility:hover {
+    color: #7dd3fc;
+    background: rgba(125, 211, 252, 0.12);
+}
+
+.desktop-input .password-visibility .material-symbols-outlined,
+.mobile-input .password-visibility .material-symbols-outlined {
+    position: static;
+    margin: 0;
+    color: currentColor;
+    font-size: 18px;
+    transform: none;
 }
 
 .desktop-input input,

@@ -22,8 +22,12 @@ class PortalAuthController extends Controller
             'identity_last4' => $identity !== '' ? substr($identity, -4) : null,
         ];
 
-        $validator = Validator::make(['identity' => $identity], [
+        $validator = Validator::make([
+            'identity' => $identity,
+            'password' => (string) $request->input('password', ''),
+        ], [
             'identity' => ['required', 'string', 'min:8', 'max:20'],
+            'password' => ['nullable', 'string', 'max:100'],
         ]);
 
         if ($validator->fails()) {
@@ -41,7 +45,10 @@ class PortalAuthController extends Controller
         try {
             $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
                 ->acceptJson()
-                ->post($endpoint, ['identity' => $identityRaw]);
+                ->post($endpoint, array_filter([
+                    'identity' => $identityRaw,
+                    'password' => (string) $request->input('password', ''),
+                ], fn ($value) => $value !== ''));
 
             if (! $response->successful() || ! str_contains((string) $response->header('Content-Type'), 'application/json')) {
                 Log::warning('Portal identity auth ERP request rejected.', array_merge($context, [
@@ -60,10 +67,14 @@ class PortalAuthController extends Controller
             if (! $authenticated || ! is_array($client) || $fastevoB2BToken === '') {
                 Log::warning('Portal identity auth failed.', array_merge($context, [
                     'authenticated' => false,
+                    'requires_password' => (bool) data_get($payload, 'data.requiresPassword', false),
                     'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
                 ]));
 
-                return response()->json($this->authResponse(false, null, $payload['meta'] ?? []));
+                return response()->json($this->authResponse(false, [
+                    'requiresPassword' => (bool) data_get($payload, 'data.requiresPassword', false),
+                    'message' => (string) data_get($payload, 'data.message', ''),
+                ], $payload['meta'] ?? []));
             }
 
             $issuedAt = now();
@@ -101,6 +112,75 @@ class PortalAuthController extends Controller
         }
     }
 
+    public function checkIdentity(Request $request): JsonResponse
+    {
+        $startedAt = microtime(true);
+        $identityRaw = (string) $request->input('identity', '');
+        $identity = preg_replace('/\D+/', '', $identityRaw) ?: '';
+        $context = [
+            'identity_present' => trim($identityRaw) !== '',
+            'identity_last4' => $identity !== '' ? substr($identity, -4) : null,
+        ];
+
+        $validator = Validator::make(['identity' => $identity], [
+            'identity' => ['required', 'string', 'min:8', 'max:20'],
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Portal password identity check rejected before ERP request.', array_merge($context, [
+                'validation_failed' => true,
+                'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
+
+            return response()->json($this->passwordResponse([
+                'exists' => false,
+                'hasPassword' => false,
+                'canCreatePassword' => false,
+                'client' => null,
+            ]));
+        }
+
+        return $this->forwardPasswordRequest('auth_check_identity', ['identity' => $identityRaw], $context, $startedAt, 'check');
+    }
+
+    public function createPassword(Request $request): JsonResponse
+    {
+        $startedAt = microtime(true);
+        $identityRaw = (string) $request->input('identity', '');
+        $identity = preg_replace('/\D+/', '', $identityRaw) ?: '';
+        $context = [
+            'identity_present' => trim($identityRaw) !== '',
+            'identity_last4' => $identity !== '' ? substr($identity, -4) : null,
+        ];
+
+        $validator = Validator::make([
+            'identity' => $identity,
+            'password' => (string) $request->input('password', ''),
+            'password_confirmation' => (string) $request->input('password_confirmation', ''),
+        ], [
+            'identity' => ['required', 'string', 'min:8', 'max:20'],
+            'password' => ['required', 'string', 'min:8', 'max:100', 'confirmed', 'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Portal password creation rejected before ERP request.', array_merge($context, [
+                'validation_failed' => true,
+                'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
+
+            return response()->json($this->passwordResponse([
+                'created' => false,
+                'message' => 'Revise identidad y confirmacion de contrasena.',
+            ]), 422);
+        }
+
+        return $this->forwardPasswordRequest('auth_create_password', [
+            'identity' => $identityRaw,
+            'password' => (string) $request->input('password', ''),
+            'password_confirmation' => (string) $request->input('password_confirmation', ''),
+        ], $context, $startedAt, 'create');
+    }
+
     private function authResponse(bool $authenticated, ?array $data = null, array $meta = []): array
     {
         return [
@@ -109,6 +189,55 @@ class PortalAuthController extends Controller
                 'token' => null,
                 'client' => null,
             ], $data ?? []),
+            'meta' => array_merge(['source' => 'fastevo-public-b2b'], $meta),
+        ];
+    }
+
+    private function forwardPasswordRequest(string $pathKey, array $payload, array $context, float $startedAt, string $operation): JsonResponse
+    {
+        $endpoint = rtrim((string) config('portal.fastevo.base_url'), '/')
+            .'/'.ltrim((string) config("portal.fastevo.paths.{$pathKey}"), '/');
+
+        try {
+            $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
+                ->acceptJson()
+                ->post($endpoint, $payload);
+
+            if (! str_contains((string) $response->header('Content-Type'), 'application/json')) {
+                Log::warning("Portal password {$operation} ERP response was not JSON.", array_merge($context, [
+                    'status' => $response->status(),
+                    'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                ]));
+
+                return response()->json($this->passwordResponse([
+                    'created' => false,
+                    'message' => 'No se pudo procesar la solicitud en este momento.',
+                ]), 502);
+            }
+
+            Log::info("Portal password {$operation} ERP request completed.", array_merge($context, [
+                'status' => $response->status(),
+                'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
+
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $exception) {
+            Log::warning("Portal password {$operation} ERP request exception.", array_merge($context, [
+                'error' => $exception->getMessage(),
+                'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]));
+
+            return response()->json($this->passwordResponse([
+                'created' => false,
+                'message' => 'No se pudo procesar la solicitud en este momento.',
+            ]), 502);
+        }
+    }
+
+    private function passwordResponse(array $data, array $meta = []): array
+    {
+        return [
+            'data' => $data,
             'meta' => array_merge(['source' => 'fastevo-public-b2b'], $meta),
         ];
     }

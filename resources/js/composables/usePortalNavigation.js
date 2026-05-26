@@ -8,6 +8,8 @@ const internalPaths = new Set([
     '/estado-de-cuenta',
     '/historial-facturas',
     '/cotizaciones',
+    '/cotizaciones/nueva',
+    '/quotes/create',
     '/perfil',
 ]);
 

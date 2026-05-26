@@ -162,6 +162,59 @@ select {
     font: inherit;
 }
 
+select,
+.glass-select {
+    border-color: var(--portal-input-border, var(--portal-glass-border));
+    background: var(--portal-input-bg, rgba(15, 23, 42, 0.86));
+    color: var(--portal-text, #f8fafc);
+    color-scheme: dark;
+}
+
+select option,
+.glass-select option {
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+select optgroup,
+.glass-select optgroup {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+:root[data-theme='light'] select,
+:root[data-theme='light'] .glass-select,
+.portal-light select,
+.portal-light .glass-select,
+body.portal-light select,
+body.portal-light .glass-select,
+body[data-theme='light'] select,
+body[data-theme='light'] .glass-select {
+    background: var(--portal-input-bg, #ffffff);
+    color: #0f172a;
+    color-scheme: light;
+}
+
+:root[data-theme='light'] select option,
+:root[data-theme='light'] .glass-select option,
+.portal-light select option,
+.portal-light .glass-select option,
+body.portal-light select option,
+body.portal-light .glass-select option,
+body[data-theme='light'] select option,
+body[data-theme='light'] .glass-select option,
+:root[data-theme='light'] select optgroup,
+:root[data-theme='light'] .glass-select optgroup,
+.portal-light select optgroup,
+.portal-light .glass-select optgroup,
+body.portal-light select optgroup,
+body.portal-light .glass-select optgroup,
+body[data-theme='light'] select optgroup,
+body[data-theme='light'] .glass-select optgroup {
+    background: #ffffff;
+    color: #0f172a;
+}
+
 button {
     cursor: pointer;
 }

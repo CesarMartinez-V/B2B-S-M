@@ -2,6 +2,7 @@ import { computed } from 'vue';
 import { useLocalStorage } from './composables/useLocalStorage.js';
 
 const items = useLocalStorage('portal-quote-cart', []);
+const QUOTE_MAX_QTY = 100;
 
 const numberOrNull = (value) => {
     const number = Number(value);
@@ -12,6 +13,7 @@ const numberOrNull = (value) => {
 const normalizeItem = (product, quantity = 1) => {
     const availableQty = numberOrNull(product.availableQty ?? product.stock);
     const priceValue = Number(product.priceValue ?? product.price ?? 0) || 0;
+    const canQuote = product.isAvailable === true || availableQty === null;
 
     return {
         id: product.id ?? product.sku,
@@ -22,19 +24,18 @@ const normalizeItem = (product, quantity = 1) => {
         priceValue,
         quantity,
         availableQty,
-        isAvailable: product.isAvailable === true,
+        maxQty: availableQty,
+        isAvailable: canQuote,
+        availabilityLabel: product.availabilityLabel ?? product.stockLabel ?? (availableQty === null ? 'Consultar disponibilidad' : (availableQty > 0 ? 'Disponible' : 'No disponible')),
     };
 };
 
 export const useQuoteCartStore = () => {
     const updateQty = (productId, qty) => {
-        const quantity = Math.max(1, Number(qty) || 1);
+        const quantity = Math.min(QUOTE_MAX_QTY, Math.max(1, Number(qty) || 1));
         const item = items.value.find((current) => current.id === productId || current.sku === productId);
 
         if (!item) return false;
-
-        const maxQty = numberOrNull(item.availableQty);
-        if (maxQty !== null && maxQty > 0 && quantity > maxQty) return false;
 
         item.quantity = quantity;
         items.value = [...items.value];
@@ -42,13 +43,15 @@ export const useQuoteCartStore = () => {
     };
 
     const addProduct = (product) => {
-        if (!product.isAvailable) return false;
+        const maxQty = numberOrNull(product.availableQty ?? product.stock);
+        const canQuote = product.isAvailable === true || maxQty === null;
+
+        if (!canQuote || maxQty === 0) return false;
 
         const existing = items.value.find((item) => item.id === product.id);
-        const maxQty = numberOrNull(product.availableQty ?? product.stock);
 
         if (existing) {
-            if (maxQty !== null && maxQty > 0 && existing.quantity >= maxQty) return false;
+            if (existing.quantity >= QUOTE_MAX_QTY) return false;
 
             existing.quantity += 1;
             items.value = [...items.value];

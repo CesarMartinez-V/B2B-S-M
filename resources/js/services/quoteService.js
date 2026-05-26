@@ -7,6 +7,7 @@ const STORAGE_KEY = 'sm_quotes_temp';
 const CART_KEYS = ['portal-quote-cart', 'sm_quote_cart', 'sm_temp_cart', 'sm_cart_temp', 'tempCart', 'cart', 'carritoTemporal'];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const stableStringify = (value) => JSON.stringify(value, Object.keys(value).sort());
 
 const readJson = (key, fallback = null) => {
     try {
@@ -36,6 +37,8 @@ const quoteResource = createDataAdapter({
             id: quote.id ?? quote.number,
             amount: Number(quote.amount ?? quote.totalValue ?? 0),
             status: quote.status ?? 'Pendiente',
+            observations: quote.observations ?? quote.comments ?? '',
+            comments: quote.comments ?? quote.observations ?? '',
             ref: quote.ref ?? `REF: Cotización ${quote.number ?? quote.id}`,
             vehicle: quote.vehicle ?? 'Cotización comercial',
             brand: quote.brand ?? 'Inversiones S&M',
@@ -69,6 +72,14 @@ const normalizeCartItems = (cart) => {
     });
 };
 
+const cartSignature = (items = []) => items
+    .map((item) => ({ sku: item.sku || item.id, qty: Number(item.qty || item.quantity || 1), price: Number(item.price ?? item.priceValue ?? 0) || 0 }))
+    .sort((left, right) => String(left.sku).localeCompare(String(right.sku)))
+    .map((item) => stableStringify(item))
+    .join('|');
+
+const temporaryId = () => `TMP-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`.toUpperCase();
+
 export const getQuoteStats = () => quoteResource.list().stats;
 export const getQuoteRows = () => quoteResource.list().rows;
 export const getMobileQuotes = () => quoteResource.list().mobileQuotes;
@@ -95,8 +106,26 @@ export const quoteService = {
     addLocalQuote(quote) {
         if (typeof window === 'undefined' || !quote) return quote;
 
-        const localQuote = { ...quote, local: true };
-        const current = this.loadLocalQuotes().filter((item) => item.id !== localQuote.id);
+        const existing = this.loadLocalQuotes().find((item) => (
+            item.id === quote.id
+            || (item.temp_quote_id && quote.temp_quote_id && item.temp_quote_id === quote.temp_quote_id)
+            || (item.cart_signature && quote.cart_signature && item.cart_signature === quote.cart_signature)
+        ));
+        const localQuote = {
+            ...(existing || {}),
+            ...quote,
+            id: existing?.id || quote.id || `#QT-${quote.temp_quote_id || temporaryId()}`,
+            temp_quote_id: existing?.temp_quote_id || quote.temp_quote_id || String(quote.id || temporaryId()).replace(/^#QT-/, ''),
+            observations: quote.observations ?? quote.comments ?? '',
+            comments: quote.comments ?? quote.observations ?? '',
+            local: true,
+        };
+        const current = this.loadLocalQuotes().filter((item) => {
+            if (item.id === localQuote.id) return false;
+            if (item.temp_quote_id && item.temp_quote_id === localQuote.temp_quote_id) return false;
+            if (item.cart_signature && localQuote.cart_signature && item.cart_signature === localQuote.cart_signature) return false;
+            return true;
+        });
         writeJson(STORAGE_KEY, [localQuote, ...current]);
         return localQuote;
     },
@@ -117,13 +146,17 @@ export const quoteService = {
         return null;
     },
 
-    createQuoteFromCart(cart) {
+    createQuoteFromCart(cart, options = {}) {
         const total = cart.items.reduce((sum, item) => sum + item.qty * item.price, 0);
-        const number = Math.floor(Date.now() / 1000).toString().slice(-6);
+        const tempQuoteId = options.tempQuoteId || temporaryId();
+        const number = tempQuoteId.replace(/^TMP-/, '').slice(-6);
+        const observations = options.observations ?? options.comments ?? '';
 
         return {
             id: `#QT-TMP-${number}`,
-            client: 'Cliente temporal',
+            temp_quote_id: tempQuoteId,
+            cart_signature: cartSignature(cart.items),
+            client: options.clientName || 'Cliente temporal',
             ref: 'REF: Carrito temporal',
             vehicle: 'Vehículo por definir',
             brand: 'Selección desde catálogo',
@@ -132,6 +165,8 @@ export const quoteService = {
             status: 'Pendiente',
             archived: false,
             local: true,
+            observations,
+            comments: observations,
             items: cart.items,
         };
     },

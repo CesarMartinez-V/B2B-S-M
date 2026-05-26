@@ -6,10 +6,19 @@
 - El carrito de cotizacion temporal vive en `portal-quote-cart` mediante `quoteCartStore.js` y guarda solo datos necesarios del producto seleccionado: id, sku, nombre, marca, categoria, cantidad, disponibilidad y precio publico interno para calcular totales.
 - El carrito permite agregar, quitar, editar cantidad, vaciar, contar productos y calcular total. Si existe disponibilidad maxima, no permite superar esa cantidad.
 - El catalogo no muestra precios ni unidades, pero usa `priceValue` y `availableQty` internamente para preparar la solicitud.
-- En `/catalogo`, los botones `Cotizar` agregan productos disponibles al carrito temporal. El CTA flotante navega por SPA a `/cotizaciones` sin crear documentos reales.
-- En `/cotizaciones`, la cotizacion temporal se puede revisar, editar, vaciar y enviar como `Solicitud preparada` local. Esta accion no crea proforma, factura, cotizacion ni invoice real en Fastevo.
+- En `/catalogo`, los botones `Cotizar` agregan productos disponibles al carrito temporal. El CTA flotante navega por SPA a `/cotizaciones/nueva` sin crear documentos reales.
+- La ruta `/cotizaciones/nueva` y el alias `/quotes/create` renderizan `NewQuotePage.vue`, pantalla basada visualmente en Fastevo `/quotes/create` pero adaptada al liquid glass del portal B2B en modo claro y oscuro.
+- En `/cotizaciones/nueva`, la cotizacion temporal se puede revisar, editar, vaciar, seguir agregando productos, agregar desde buscador de catalogo y guardar como `Solicitud preparada` local. Esta accion no crea proforma, factura, cotizacion ni invoice real en Fastevo.
+- En `/cotizaciones`, las cotizaciones reales existentes siguen separadas visualmente de solicitudes temporales locales. El boton `Nueva Cotización` navega a `/cotizaciones/nueva`.
 - Las cotizaciones reales siguen llegando desde `GET /api/portal/quotes`. Las solicitudes temporales locales se guardan en `sm_quotes_temp` y se mezclan visualmente sin modificar ERP.
-- `Enviar solicitud` marca la solicitud local como preparada y muestra el mensaje: `La creacion real en ERP queda pendiente de aprobacion`.
+- `Guardar solicitud` marca la solicitud local como preparada, pregunta si se desea vaciar el carrito y muestra el mensaje: `La creacion real en ERP queda pendiente de aprobacion`.
+- Validaciones de la pantalla nueva: al menos un producto, cantidad mayor a 0, cantidad maxima `100`, no agregar productos con disponibilidad 0, permitir productos en `Consultar disponibilidad`, observaciones maximo 500 caracteres y bloqueo del envio si hay errores.
+- El limite operativo de cantidad para cotizar en el portal es `100` unidades por linea para solicitudes temporales, aunque el catalogo muestre una disponibilidad menor. Esto evita bloquear cotizaciones B2B que requieren confirmacion comercial posterior.
+- Las solicitudes temporales usan `temp_quote_id` y `cart_signature`; `quoteService.addLocalQuote()` actualiza una solicitud existente si coincide el id temporal o la firma del carrito, evitando duplicados al tocar `Enviar solicitud` despues de guardar desde `/cotizaciones/nueva`.
+- `POST /api/portal/quotes` es temporal/local: valida al menos un item, cantidades `1..100`, observaciones maximo 500 y responde `meta.persisted=false`. No llama Fastevo ni crea documento real.
+- Las observaciones se guardan en el campo `observations` y se espejan en `comments` para compatibilidad con solicitudes temporales anteriores.
+- El detalle de cotizacion en `/cotizaciones` usa `AppModal` con `size: 'lg'`, lista productos, total, estado, origen y observaciones completas en un bloque destacado. Las solicitudes locales muestran etiqueta `Temporal · No enviada al ERP`.
+- Los `select` nativos tienen estilos globales en `resources/css/app.css` para que `select` y `option` conserven contraste en modo oscuro y claro.
 - Los botones de panel navegan a rutas reales cuando existe flujo read-only: catalogo, estado de cuenta, historial, pedidos y cotizaciones. Acciones de reportes/filtros futuros muestran modal de integracion ERP pendiente.
 - En pedidos, los documentos comerciales y guias no exponen `guide_url` ni rutas internas. Si no hay endpoint seguro, abren modal explicando que se requiere un endpoint seguro de documentos en Fastevo.
 - Estado de cuenta e historial exportan una impresion basica segura de la vista actual usando escape HTML en `usePdfExport.js`.
@@ -20,8 +29,9 @@
 
 Pruebas manuales sugeridas:
 
-- Catalogo: agregar producto disponible, verificar contador, tocar `Cotizar`, llegar a `/cotizaciones`.
-- Cotizaciones: editar cantidad, quitar producto, vaciar, seguir cotizando y enviar solicitud temporal.
+- Catalogo: agregar producto disponible, verificar contador, tocar `Cotizar`, llegar a `/cotizaciones/nueva`.
+- Nueva cotizacion: editar cantidad, validar cantidad invalida, quitar producto, vaciar, seguir agregando productos, agregar desde buscador y guardar solicitud temporal.
+- Cotizaciones: verificar que `Nueva Cotización` abre `/cotizaciones/nueva` y que las solicitudes temporales quedan etiquetadas como locales/preparadas.
 - Pedidos: abrir detalle, intentar documentos, contactar soporte y ver mapa sin coordenadas.
 - Estado de cuenta: filtros, cargar mas, exportar PDF basico, ver comprobante y contactar vendedor.
 - Historial: buscar, filtrar, paginar, ver detalle, exportar y contactar vendedor.
@@ -122,6 +132,8 @@ La URL base y rutas B2B publicas de Fastevo estan centralizadas en `config/porta
     'timeout' => 15,
     'paths' => [
         'auth_identity' => '/api/portal-b2b/auth/identity',
+        'auth_check_identity' => '/api/portal-b2b/auth/check-identity',
+        'auth_create_password' => '/api/portal-b2b/auth/create-password',
         'products' => '/api/portal-b2b/products',
         'invoices' => '/api/portal-b2b/invoices',
         'account' => '/api/portal-b2b/account',
@@ -135,19 +147,67 @@ La URL base y rutas B2B publicas de Fastevo estan centralizadas en `config/porta
 
 ### Login B2B temporal por identidad/RTN
 
-- El login del portal pide `Numero de identidad o RTN` y envia el valor a `POST /api/portal/auth/identity`.
+- El login del portal muestra desde el inicio `Numero de identidad o RTN` y `Contrasena`, y envia el valor a `POST /api/portal/auth/identity`.
+- La contrasena es opcional temporalmente en frontend para clientes que aun no tienen `clients.portal_password`.
+- Si el usuario escribe contrasena, Inversiones_S&M la reenvia server-to-server a Fastevo. No se guarda localmente ni se imprime en logs.
 - Inversiones_S&M no consulta tablas locales de clientes. Actua como bridge y llama a Fastevo `POST /api/portal-b2b/auth/identity`.
 - Fastevo valida contra `clients.vat_number`, normalizando el valor con `preg_replace('/\D+/', '', $identity)` para aceptar guiones, espacios, puntos y slash.
 - Si no existe cliente activo o hay mas de un cliente con el mismo `vat_number` normalizado, Fastevo responde `authenticated=false` y no devuelve lista ni datos sensibles.
 - Si existe exactamente un cliente valido, Fastevo devuelve `token`, `client.name`, `client.code` y `client.vatNumberMasked`. No devuelve `client_id` plano, `vat_number` completo, correo, telefono, direccion ni datos administrativos.
 - Inversiones_S&M crea un token temporal interno con `Crypt::encryptString(json_encode(...))` que encapsula `fastevo_b2b_token`, `client_name`, `client_code`, `issued_at` y `expires_at`.
 - El frontend guarda solo el token temporal interno en `sessionStorage` bajo `portal-auth-session` y lo envia en el header `X-Portal-Session` en cada request `/api/portal/*`.
+- Los endpoints internos de datos del portal (`/api/portal/dashboard`, `/catalog`, `/orders`, `/account`, `/invoices`, `/quotes`, `/profile`) requieren `X-Portal-Session`; sin ese header responden `401` y no sirven fallback mock publico.
 - `ExternalPortalDataGateway` desencripta `X-Portal-Session`, extrae `fastevo_b2b_token` y llama Fastevo con `Authorization: Bearer <token>`. Vue sigue consumiendo solo `/api/portal/*`.
 - Inversiones_S&M ya no envia `client_id` por query a Fastevo. Esto evita IDOR porque Fastevo resuelve el cliente desde el token B2B.
 - Si Fastevo responde `401` o el token interno expira, el portal devuelve sesion expirada, limpia la sesion frontend y regresa a `/login`.
 - Al iniciar sesion con otro cliente o al cerrar sesion se limpian caches de perfil, cuenta, facturas, pedidos, cotizaciones, dashboard, catalogo, carrito temporal y prefetch.
-- Esta fase es temporal. Produccion debe agregar una segunda capa de seguridad: contrasena, OTP, correo, enlace firmado o autenticacion real del portal.
+- Esta fase es de transicion: clientes con `portal_password` deben ingresar contrasena; clientes sin `portal_password` aun pueden ingresar temporalmente solo con identidad. Produccion futura debe hacer contrasena u OTP obligatoria para todos.
 - Logs seguros: se permite `identity_present`, `identity_last4`, `token_valid`, `b2b_token_present`, `duplicate_detected` y tiempos. No se debe imprimir identidad completa, RTN completo, token ni `client_id` real.
+
+### Crear contrasena B2B temporal
+
+- El login agrega un apartado `Crear contrasena` sin redisenar la pantalla ni cambiar el login actual por identidad.
+- Vue consume solo endpoints internos de Inversiones_S&M:
+  - `POST /api/portal/auth/check-identity`
+  - `POST /api/portal/auth/create-password`
+- Inversiones_S&M actua como bridge hacia Fastevo:
+  - `POST /api/portal-b2b/auth/check-identity`
+  - `POST /api/portal-b2b/auth/create-password`
+- Persistencia actual en Fastevo:
+  - La contrasena del portal B2B se guarda en `clients.portal_password`.
+  - `clients.portal_password_created_at` y `clients.portal_password_updated_at` guardan auditoria basica de creacion/actualizacion.
+  - `portal_password` se guarda hasheada con `Hash::make()`; nunca plana.
+  - `users.password` existe, pero `users` corresponde a usuarios internos del ERP. `Client -> user` representa un usuario asociado/vendedor/gestor, no una cuenta B2B del cliente.
+  - No se modifican usuarios internos ni se crean usuarios ERP.
+- No se usa cache para contrasenas B2B.
+- `check-identity` calcula `hasPassword = !empty(client.portal_password)` y `canCreatePassword = exists && !hasPassword`.
+- Validaciones de contrasena: requerida, minimo 8 caracteres, confirmacion obligatoria, al menos una letra y al menos un numero. Simbolo queda opcional.
+- Rate limit:
+  - Fastevo `check-identity`: `throttle:10,1`.
+  - Fastevo `create-password`: `throttle:5,1`.
+  - Inversiones replica throttle en sus endpoints bridge.
+- Si ya existe `portal_password`, no permite crear otra y muestra `Este cliente ya tiene contrasena creada.`. Reset queda como flujo separado futuro.
+- Login por identidad sigue funcionando para clientes sin `portal_password`, para no romper la transicion.
+- Si el cliente ya tiene `portal_password`, `POST /api/portal-b2b/auth/identity` exige `password` y valida con `Hash::check()` antes de emitir el token B2B.
+- La UI mantiene visible el campo `Contrasena` desde la primera carga. Si el backend responde `requiresPassword=true`, marca error en el campo y enfoca el input.
+- Despues de crear contrasena correctamente, la UI vuelve al login, deja la identidad precargada, mantiene visible el campo contrasena y enfoca ese campo.
+- Produccion ideal debe agregar una segunda validacion fuerte para crear contrasena: OTP por SMS/email, enlace firmado, codigo validado por vendedor o aprobacion comercial.
+- Logs seguros: solo `identity_present`, `identity_last4`, banderas, estado HTTP y tiempos. No imprimir RTN completo, contrasena, hash, token, correo o telefono completo.
+
+Pruebas manuales del flujo crear contrasena:
+
+- Identidad inexistente: debe mostrar error claro sin datos adicionales.
+- Identidad existente sin `portal_password`: debe mostrar cliente con RTN enmascarado y permitir crear contrasena.
+- Confirmacion incorrecta: debe bloquear en UI/backend.
+- Contrasena sin letra o sin numero: debe bloquear.
+- Contrasena valida: debe responder `created=true` y guardar hash en `clients.portal_password`.
+- Verificar DB: `clients.portal_password` no debe estar en texto plano.
+- Intentar crear otra vez: debe mostrar que ya tiene contrasena creada y no sobrescribir.
+- Login sin password para cliente con `portal_password`: debe responder `requiresPassword=true`.
+- Login con password incorrecta: debe fallar sin emitir token.
+- Login con password correcta: debe emitir token B2B y entrar al portal.
+- Revisar logs: no deben contener RTN completo, contrasena, hash ni token.
+- UI: probar desktop y mobile en `/login`.
 
 Pruebas manuales del login temporal:
 
@@ -270,6 +330,8 @@ Rutas internas SPA:
 - `/estado-de-cuenta`
 - `/historial-facturas`
 - `/cotizaciones`
+- `/cotizaciones/nueva`
+- `/quotes/create`
 - `/perfil`
 
 El cache frontend sigue el patron stale-while-revalidate:
@@ -342,7 +404,7 @@ Navegacion SPA sin `vue-router`:
 - `resources/js/composables/usePortalNavigation.js` centraliza `currentPath`, `navigateTo()`, `normalizePath()` e `isInternalPortalPath()`.
 - Las rutas internas usan `history.pushState()`; los botones Back/Forward del navegador actualizan `currentPath` por `popstate`.
 - `App.vue` selecciona la pantalla desde `currentPath` sin recargar la app.
-- Las rutas SPA cubiertas son `/panel`, `/catalogo`, `/marcas`, `/pedidos`, `/estado-de-cuenta`, `/historial-facturas`, `/cotizaciones` y `/perfil`.
+- Las rutas SPA cubiertas son `/panel`, `/catalogo`, `/marcas`, `/pedidos`, `/estado-de-cuenta`, `/historial-facturas`, `/cotizaciones`, `/cotizaciones/nueva`, `/quotes/create` y `/perfil`.
 - `/login` se mantiene como ruta publica.
 - Si el usuario queda no autenticado en una ruta interna, `App.vue` reemplaza la URL por `/login` para evitar pantallas bloqueadas al usar Back despues de logout.
 - El logout ejecuta `logout()`, limpia `portal.catalog.cache.v1` mediante `clearCatalogCache()` y navega a `/login`.
@@ -521,7 +583,7 @@ Checklist manual antes de PR:
 - `GET /api/portal/invoices`: facturas con filtros `query`, `status`, `from`, `to`, `page`, `per_page`.
 - `GET /api/portal/quotes`: cotizaciones con filtros `search`, `status`, `archived`, `page`, `per_page`.
 - `GET /api/portal/profile`: perfil.
-- `POST /api/portal/quotes`: crea respuesta temporal de cotizacion, sin persistencia real.
+- `POST /api/portal/quotes`: crea respuesta temporal de cotizacion con validacion JSON; `meta.persisted=false`, sin persistencia real ni escritura en Fastevo.
 - `POST /api/portal/support/contact`: crea respuesta temporal de soporte, sin persistencia real.
 
 ### Bridge Laravel
