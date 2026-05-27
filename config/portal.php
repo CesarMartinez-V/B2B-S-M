@@ -2,7 +2,7 @@
 
 return [
     'fastevo' => [
-        'base_url' => 'http://localhost:8001',
+        'base_url' => 'https://dev.capgrupo.com',
         'timeout' => 15,
         'paths' => [
             'auth_identity' => '/api/portal-b2b/auth/identity',
