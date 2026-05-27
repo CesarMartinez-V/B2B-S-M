@@ -398,13 +398,6 @@ const openHelp = (type) => {
                     <p class="login-temp-note">{{ loginStep === 'identity' ? 'Ingrese su identidad o RTN para validar su acceso B2B.' : 'Cliente validado. Ingrese su contraseña para continuar.' }}</p>
                     <button v-if="loginStep === 'password'" type="button" class="change-identity-btn" @click="resetToIdentityStep">Cambiar identidad</button>
 
-                    <section class="password-create-box">
-                        <button type="button" class="password-create-toggle" @click="togglePasswordFlow">
-                            <span class="material-symbols-outlined">lock_reset</span>
-                            <span>Crear contraseña</span>
-                        </button>
-                    </section>
-
                     <label class="desktop-remember">
                         <span class="checkbox-wrap">
                             <input id="remember-desktop" type="checkbox">
