@@ -7,7 +7,7 @@ import { getDashboardActivity, getDashboardChart, getDashboardClientConfigured, 
 
 const { openSupportModal, explainPendingIntegration, goToCatalog, goToQuotes, goToInvoices, goToOrders } = usePortalActions();
 
-const heroImage = new URL('../../../stitch_inversiones_s_m_future_b2b_portal/stitch_inversiones_s_m_future_b2b_portal/macro_shot_of_a_high_tech_automotive_engine_component_glowing_blue_fiber_optics/screen.png', import.meta.url).href;
+const heroImage = '/images/dashboard-engine.png';
 const promoImages = [
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDgXi9a2yg8HV_YL1Bjq2aGdcqoZTsU85OQ5tMLk9YVaK6Oy_Ae6kGBbGt5nXi1_Dv0PLnHNPexEpxV3frod-GCDz3BUKC5vtsX61JAsp87FasL3al--G7gRmmCMLfzFlSQu2rhnplTHe2YSjDmXoEkizVZ_iu5gGoj-8raNCJV2Kw0OTtiOGR5Ef2KN2KkQWMNyBtR8s_dUjeJBuK2GuSjna375vyaoOXchNG66WwFW2Lw9jFzdpENCTNM3rJNd88QYgc_z0gDm8I',
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDbAymn8CbivADNk1blzouw7I4IGinITq73dW68e3l36YDx8ziTVjl0gg1f8oS4SnmQTsJs1pqSLi_Aw9oW_82icNM2FAmFEp8EcngIIkxBAtgGppZ49z821x0m3ZbJUdjusABxECi5adKM6hdb_eJMDbX6pTkcRffwLEv5MXX_7x_7yroSwz5G1C1FlB1OmVH5ERcz1yt2S6HEpkltPXtZ249noIrestkci1oHLxaU8tWp6uYURcKYf_XOKPvT3LF7dKtsYvaWnSM',

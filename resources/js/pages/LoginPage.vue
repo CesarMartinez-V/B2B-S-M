@@ -7,18 +7,21 @@ import { useToast } from '../composables/useToast.js';
 import { PalabrasWeb } from '../PalabrasWeb.js';
 
 const words = PalabrasWeb.auth;
-const backgroundImage = new URL('../../../stitch_inversiones_s_m_future_b2b_portal/stitch_inversiones_s_m_future_b2b_portal/cinematic_wide_shot_of_a_futuristic_luxury_electric_sports_car_interior_and/screen.png', import.meta.url).href;
+const backgroundImage = '/images/login-car.png';
 const { login } = useAuth();
 const { openModal } = useModal();
 const { error, success } = useToast();
 const loading = ref(false);
-const passwordFlowOpen = ref(false);
 const checkingPasswordIdentity = ref(false);
 const creatingPassword = ref(false);
-const showLoginPassword = ref(true);
+const loginStep = ref('identity');
 const showPasswordText = ref(false);
 const desktopPasswordInput = ref(null);
 const mobilePasswordInput = ref(null);
+const activeLoginMode = ref('desktop');
+const createPasswordModalOpen = ref(false);
+const createPasswordIdentityVerified = ref(false);
+const createPasswordIntro = ref('Hemos detectado que aún no tiene una contraseña. Por favor cree una para continuar.');
 const passwordStep = ref('identity');
 const passwordMessage = ref('');
 const passwordClient = ref(null);
@@ -54,9 +57,9 @@ const validate = (values, mode = 'desktop') => {
     const passwordKey = mode === 'mobile' ? 'mobileLoginPassword' : 'loginPassword';
 
     errors[identityKey] = values.identity.trim() ? '' : 'Ingrese su número de identidad o RTN.';
-    errors[passwordKey] = '';
+    errors[passwordKey] = loginStep.value === 'password' && !values.password ? 'Ingrese su contraseña.' : '';
 
-    return !errors[identityKey];
+    return !errors[identityKey] && !errors[passwordKey];
 };
 
 const focusPasswordInput = (mode = 'desktop') => {
@@ -66,11 +69,88 @@ const focusPasswordInput = (mode = 'desktop') => {
     });
 };
 
+const syncIdentity = (identity) => {
+    form.identity = identity;
+    mobileForm.identity = identity;
+    passwordForm.identity = identity;
+};
+
+const resetToIdentityStep = () => {
+    loginStep.value = 'identity';
+    form.password = '';
+    mobileForm.password = '';
+    errors.loginPassword = '';
+    errors.mobileLoginPassword = '';
+};
+
+const openCreatePasswordModal = (identity, intro = 'Hemos detectado que aún no tiene una contraseña. Por favor cree una para continuar.') => {
+    syncIdentity(identity);
+    createPasswordIntro.value = intro;
+    createPasswordIdentityVerified.value = true;
+    createPasswordModalOpen.value = true;
+    passwordStep.value = 'password';
+    passwordMessage.value = '';
+    passwordForm.password = '';
+    passwordForm.password_confirmation = '';
+    errors.newPassword = '';
+    errors.passwordConfirmation = '';
+};
+
+const handleIdentityStep = async (mode = 'desktop') => {
+    activeLoginMode.value = mode;
+    const values = mode === 'mobile' ? mobileForm : form;
+    const identity = values.identity.trim();
+
+    if (!validate(values, mode)) {
+        error('Ingrese su número de identidad o RTN.');
+        return;
+    }
+
+    checkingPasswordIdentity.value = true;
+
+    try {
+        const result = await postPortalAuth('/api/portal/auth/check-identity', { identity });
+        const data = result.data?.data || {};
+
+        if (!data.exists) {
+            resetToIdentityStep();
+            error('No encontramos un cliente B2B con ese número de identidad o RTN.');
+            return;
+        }
+
+        syncIdentity(identity);
+        activeLoginMode.value = mode;
+        passwordClient.value = data.client || null;
+
+        if (data.hasPassword) {
+            loginStep.value = 'password';
+            focusPasswordInput(mode);
+            return;
+        }
+
+        if (data.canCreatePassword) {
+            openCreatePasswordModal(identity);
+            return;
+        }
+
+        error('No se puede crear contraseña para esta identidad en este momento.');
+    } catch {
+        error('No se pudo verificar la identidad en este momento.');
+    } finally {
+        checkingPasswordIdentity.value = false;
+    }
+};
+
 const handleLogin = async (mode = 'desktop') => {
     const values = mode === 'mobile' ? mobileForm : form;
 
+    if (loginStep.value === 'identity') {
+        await handleIdentityStep(mode);
+        return;
+    }
+
     if (!validate(values, mode)) {
-        error('Ingresa tu número de identidad o RTN para continuar.');
+        error(errors[mode === 'mobile' ? 'mobileLoginPassword' : 'loginPassword'] || 'Ingrese su número de identidad o RTN.');
         return;
     }
 
@@ -81,7 +161,7 @@ const handleLogin = async (mode = 'desktop') => {
 
         if (!result.authenticated) {
             if (result.requiresPassword) {
-                showLoginPassword.value = true;
+                loginStep.value = 'password';
                 const passwordKey = mode === 'mobile' ? 'mobileLoginPassword' : 'loginPassword';
                 errors[passwordKey] = result.message === 'Identidad o contrasena incorrecta.'
                     ? 'Identidad o contraseña incorrecta.'
@@ -120,10 +200,19 @@ const postPortalAuth = async (endpoint, payload) => {
 };
 
 const togglePasswordFlow = () => {
-    passwordFlowOpen.value = !passwordFlowOpen.value;
-    if (passwordFlowOpen.value && !passwordForm.identity.trim()) {
-        passwordForm.identity = form.identity.trim() || mobileForm.identity.trim();
-    }
+    const identity = form.identity.trim() || mobileForm.identity.trim() || passwordForm.identity.trim();
+    createPasswordModalOpen.value = true;
+    createPasswordIdentityVerified.value = false;
+    createPasswordIntro.value = 'Ingrese su identidad o RTN para crear una contraseña del portal B2B.';
+    passwordStep.value = 'identity';
+    passwordMessage.value = '';
+    passwordClient.value = null;
+    passwordForm.identity = identity;
+    passwordForm.password = '';
+    passwordForm.password_confirmation = '';
+    errors.createIdentity = '';
+    errors.newPassword = '';
+    errors.passwordConfirmation = '';
 };
 
 const resetPasswordFlow = () => {
@@ -162,9 +251,9 @@ const checkPasswordIdentity = async () => {
 
         if (data.hasPassword) {
             passwordMessage.value = 'Este cliente ya tiene contraseña creada. Inicie sesión.';
-            showLoginPassword.value = true;
-            form.identity = passwordForm.identity.trim();
-            mobileForm.identity = passwordForm.identity.trim();
+            syncIdentity(passwordForm.identity.trim());
+            loginStep.value = 'password';
+            createPasswordModalOpen.value = false;
             focusPasswordInput();
             passwordStep.value = 'blocked';
             return;
@@ -177,6 +266,7 @@ const checkPasswordIdentity = async () => {
         }
 
         passwordMessage.value = 'Identidad validada. Cree una contraseña para iniciar sesión en el portal.';
+        createPasswordIdentityVerified.value = true;
         passwordStep.value = 'password';
     } catch {
         error('No se pudo verificar la identidad en este momento.');
@@ -221,11 +311,10 @@ const submitPasswordCreation = async () => {
         success(data.message || 'Contraseña creada correctamente.');
         passwordMessage.value = 'Contraseña creada correctamente. Ahora puede iniciar sesión.';
         passwordStep.value = 'success';
-        form.identity = passwordForm.identity.trim();
-        mobileForm.identity = passwordForm.identity.trim();
-        showLoginPassword.value = true;
-        passwordFlowOpen.value = false;
-        focusPasswordInput();
+        syncIdentity(passwordForm.identity.trim());
+        loginStep.value = 'password';
+        createPasswordModalOpen.value = false;
+        focusPasswordInput(activeLoginMode.value);
         passwordForm.password = '';
         passwordForm.password_confirmation = '';
     } catch {
@@ -294,7 +383,7 @@ const openHelp = (type) => {
                         <small v-if="errors.identity" class="login-error">{{ errors.identity }}</small>
                     </label>
 
-                    <label v-if="showLoginPassword" class="desktop-field">
+                    <label v-if="loginStep === 'password'" class="desktop-field">
                         <span>Contraseña</span>
                         <span class="desktop-input liquid-glass input-glow">
                             <span class="material-symbols-outlined">lock</span>
@@ -306,58 +395,14 @@ const openHelp = (type) => {
                         <small v-if="errors.loginPassword" class="login-error">{{ errors.loginPassword }}</small>
                     </label>
 
-                    <p class="login-temp-note">Ingrese con su identidad o RTN. Si ya creó una contraseña, colóquela para acceder.</p>
+                    <p class="login-temp-note">{{ loginStep === 'identity' ? 'Ingrese su identidad o RTN para validar su acceso B2B.' : 'Cliente validado. Ingrese su contraseña para continuar.' }}</p>
+                    <button v-if="loginStep === 'password'" type="button" class="change-identity-btn" @click="resetToIdentityStep">Cambiar identidad</button>
 
                     <section class="password-create-box">
                         <button type="button" class="password-create-toggle" @click="togglePasswordFlow">
                             <span class="material-symbols-outlined">lock_reset</span>
                             <span>Crear contraseña</span>
                         </button>
-
-                        <div v-if="passwordFlowOpen" class="password-create-panel">
-                            <p class="password-security-note">Cree una contraseña para su cliente B2B registrado por identidad/RTN.</p>
-
-                            <label class="password-field">
-                                <span>Identidad o RTN</span>
-                                <input v-model="passwordForm.identity" type="text" inputmode="numeric" autocomplete="off" placeholder="0801**********">
-                                <small v-if="errors.createIdentity" class="login-error">{{ errors.createIdentity }}</small>
-                            </label>
-
-                            <button type="button" class="password-action" :disabled="checkingPasswordIdentity" @click="checkPasswordIdentity">
-                                {{ checkingPasswordIdentity ? 'Verificando...' : 'Verificar identidad' }}
-                            </button>
-
-                            <div v-if="passwordClient" class="password-client-card">
-                                <strong>{{ passwordClient.name }}</strong>
-                                <span>{{ passwordClient.code }} · {{ passwordClient.vatNumberMasked }}</span>
-                            </div>
-
-                            <p v-if="passwordMessage" class="password-flow-message">{{ passwordMessage }}</p>
-
-                            <div v-if="passwordStep === 'password'" class="password-fields-stack">
-                                <label class="password-field">
-                                    <span>Nueva contraseña</span>
-                                    <input v-model="passwordForm.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
-                                    <small v-if="errors.newPassword" class="login-error">{{ errors.newPassword }}</small>
-                                </label>
-
-                                <label class="password-field">
-                                    <span>Confirmar contraseña</span>
-                                    <input v-model="passwordForm.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita la contraseña">
-                                    <small v-if="errors.passwordConfirmation" class="login-error">{{ errors.passwordConfirmation }}</small>
-                                </label>
-
-                                <ul class="password-rules">
-                                    <li>Mínimo 8 caracteres</li>
-                                    <li>Al menos una letra</li>
-                                    <li>Al menos un número</li>
-                                </ul>
-
-                                <button type="button" class="password-action password-action--primary" :disabled="creatingPassword" @click="submitPasswordCreation">
-                                    {{ creatingPassword ? 'Creando...' : 'Crear contraseña' }}
-                                </button>
-                            </div>
-                        </div>
                     </section>
 
                     <label class="desktop-remember">
@@ -368,9 +413,9 @@ const openHelp = (type) => {
                         <span>{{ words.desktop.remember }}</span>
                     </label>
 
-                    <button class="desktop-submit" type="submit" :disabled="loading">
+                    <button class="desktop-submit" type="submit" :disabled="loading || checkingPasswordIdentity">
                         <span class="submit-inner">
-                            <span>{{ loading ? 'Validando...' : words.desktop.submit }}</span>
+                            <span>{{ checkingPasswordIdentity ? 'Validando...' : loading ? 'Ingresando...' : loginStep === 'identity' ? 'Siguiente' : 'Ingresar al sistema' }}</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                         </span>
                     </button>
@@ -421,7 +466,7 @@ const openHelp = (type) => {
                             <small v-if="errors.mobileIdentity" class="login-error">{{ errors.mobileIdentity }}</small>
                         </label>
 
-                        <label v-if="showLoginPassword" class="mobile-field">
+                        <label v-if="loginStep === 'password'" class="mobile-field">
                             <span>Contraseña</span>
                             <span class="mobile-input glass-input">
                                 <span class="material-symbols-outlined">lock</span>
@@ -433,58 +478,14 @@ const openHelp = (type) => {
                             <small v-if="errors.mobileLoginPassword" class="login-error">{{ errors.mobileLoginPassword }}</small>
                         </label>
 
-                        <p class="login-temp-note">Ingrese con su identidad o RTN. Si ya creó una contraseña, colóquela para acceder.</p>
+                        <p class="login-temp-note">{{ loginStep === 'identity' ? 'Ingrese su identidad o RTN para validar su acceso B2B.' : 'Cliente validado. Ingrese su contraseña para continuar.' }}</p>
+                        <button v-if="loginStep === 'password'" type="button" class="change-identity-btn" @click="resetToIdentityStep">Cambiar identidad</button>
 
                         <section class="password-create-box password-create-box--mobile">
                             <button type="button" class="password-create-toggle" @click="togglePasswordFlow">
                                 <span class="material-symbols-outlined">lock_reset</span>
                                 <span>Crear contraseña</span>
                             </button>
-
-                            <div v-if="passwordFlowOpen" class="password-create-panel">
-                                <p class="password-security-note">Cree una contraseña para su cliente B2B registrado por identidad/RTN.</p>
-
-                                <label class="password-field">
-                                    <span>Identidad o RTN</span>
-                                    <input v-model="passwordForm.identity" type="text" inputmode="numeric" autocomplete="off" placeholder="0801**********">
-                                    <small v-if="errors.createIdentity" class="login-error">{{ errors.createIdentity }}</small>
-                                </label>
-
-                                <button type="button" class="password-action" :disabled="checkingPasswordIdentity" @click="checkPasswordIdentity">
-                                    {{ checkingPasswordIdentity ? 'Verificando...' : 'Verificar identidad' }}
-                                </button>
-
-                                <div v-if="passwordClient" class="password-client-card">
-                                    <strong>{{ passwordClient.name }}</strong>
-                                    <span>{{ passwordClient.code }} · {{ passwordClient.vatNumberMasked }}</span>
-                                </div>
-
-                                <p v-if="passwordMessage" class="password-flow-message">{{ passwordMessage }}</p>
-
-                                <div v-if="passwordStep === 'password'" class="password-fields-stack">
-                                    <label class="password-field">
-                                        <span>Nueva contraseña</span>
-                                        <input v-model="passwordForm.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
-                                        <small v-if="errors.newPassword" class="login-error">{{ errors.newPassword }}</small>
-                                    </label>
-
-                                    <label class="password-field">
-                                        <span>Confirmar contraseña</span>
-                                        <input v-model="passwordForm.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita la contraseña">
-                                        <small v-if="errors.passwordConfirmation" class="login-error">{{ errors.passwordConfirmation }}</small>
-                                    </label>
-
-                                    <ul class="password-rules">
-                                        <li>Mínimo 8 caracteres</li>
-                                        <li>Al menos una letra</li>
-                                        <li>Al menos un número</li>
-                                    </ul>
-
-                                    <button type="button" class="password-action password-action--primary" :disabled="creatingPassword" @click="submitPasswordCreation">
-                                        {{ creatingPassword ? 'Creando...' : 'Crear contraseña' }}
-                                    </button>
-                                </div>
-                            </div>
                         </section>
 
                         <label class="mobile-remember">
@@ -492,8 +493,8 @@ const openHelp = (type) => {
                             <span>{{ words.mobile.remember }}</span>
                         </label>
 
-                        <button class="mobile-submit" type="submit" :disabled="loading">
-                            <span>{{ loading ? 'Validando...' : words.mobile.submit }}</span>
+                        <button class="mobile-submit" type="submit" :disabled="loading || checkingPasswordIdentity">
+                            <span>{{ checkingPasswordIdentity ? 'Validando...' : loading ? 'Ingresando...' : loginStep === 'identity' ? 'Siguiente' : 'Ingresar al sistema' }}</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                             <span class="mobile-shimmer" aria-hidden="true"></span>
                         </button>
@@ -525,6 +526,60 @@ const openHelp = (type) => {
                 </template>
             </div>
         </section>
+
+        <div v-if="createPasswordModalOpen" class="password-modal-backdrop" @click.self="createPasswordModalOpen = false">
+            <section class="password-modal-card" role="dialog" aria-modal="true" aria-label="Crear contraseña B2B">
+                <button class="password-modal-close" type="button" aria-label="Cerrar" @click="createPasswordModalOpen = false">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+                <span class="password-modal-icon material-symbols-outlined">lock_reset</span>
+                <h2>Crear contraseña</h2>
+                <p>{{ createPasswordIntro }}</p>
+
+                <div class="password-create-panel password-create-panel--modal">
+                    <label class="password-field">
+                        <span>Identidad o RTN</span>
+                        <input v-model="passwordForm.identity" :readonly="createPasswordIdentityVerified" type="text" inputmode="numeric" autocomplete="off" placeholder="0801**********">
+                        <small v-if="errors.createIdentity" class="login-error">{{ errors.createIdentity }}</small>
+                    </label>
+
+                    <button v-if="!createPasswordIdentityVerified" type="button" class="password-action" :disabled="checkingPasswordIdentity" @click="checkPasswordIdentity">
+                        {{ checkingPasswordIdentity ? 'Verificando...' : 'Verificar identidad' }}
+                    </button>
+
+                    <div v-if="passwordClient" class="password-client-card">
+                        <strong>{{ passwordClient.name }}</strong>
+                        <span>{{ passwordClient.code }} · {{ passwordClient.vatNumberMasked }}</span>
+                    </div>
+
+                    <p v-if="passwordMessage" class="password-flow-message">{{ passwordMessage }}</p>
+
+                    <div v-if="passwordStep === 'password'" class="password-fields-stack">
+                        <label class="password-field">
+                            <span>Nueva contraseña</span>
+                            <input v-model="passwordForm.password" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+                            <small v-if="errors.newPassword" class="login-error">{{ errors.newPassword }}</small>
+                        </label>
+
+                        <label class="password-field">
+                            <span>Confirmar contraseña</span>
+                            <input v-model="passwordForm.password_confirmation" type="password" autocomplete="new-password" placeholder="Repita la contraseña">
+                            <small v-if="errors.passwordConfirmation" class="login-error">{{ errors.passwordConfirmation }}</small>
+                        </label>
+
+                        <ul class="password-rules">
+                            <li>Mínimo 8 caracteres</li>
+                            <li>Al menos una letra</li>
+                            <li>Al menos un número</li>
+                        </ul>
+
+                        <button type="button" class="password-action password-action--primary" :disabled="creatingPassword" @click="submitPasswordCreation">
+                            {{ creatingPassword ? 'Creando...' : 'Crear contraseña' }}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
 
         <aside class="desktop-floating-tools" aria-hidden="true">
             <div class="liquid-glass">
@@ -753,6 +808,19 @@ const openHelp = (type) => {
     margin-top: -8px;
 }
 
+.change-identity-btn {
+    width: max-content;
+    margin-top: -8px;
+    border: 0;
+    color: #7dd3fc;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
 .password-create-toggle,
 .password-action {
     display: inline-flex;
@@ -791,6 +859,71 @@ const openHelp = (type) => {
     border-radius: 22px;
     background: linear-gradient(135deg, rgba(7, 17, 31, 0.9), rgba(15, 34, 58, 0.74));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.password-create-panel--modal {
+    margin-top: 18px;
+    background: rgba(7, 17, 31, 0.72);
+}
+
+.password-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(3, 7, 18, 0.66);
+    backdrop-filter: blur(14px);
+}
+
+.password-modal-card {
+    position: relative;
+    width: min(520px, 100%);
+    max-height: 88vh;
+    overflow: auto;
+    padding: 26px;
+    border: 1px solid rgba(125, 211, 252, 0.2);
+    border-radius: 28px;
+    color: #e0e8f0;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 13, 26, 0.94));
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.password-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    border: 0;
+    color: #8fa6b8;
+    background: transparent;
+    cursor: pointer;
+}
+
+.password-modal-icon {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    margin-bottom: 14px;
+    border-radius: 16px;
+    color: #7dd3fc;
+    background: rgba(125, 211, 252, 0.14);
+}
+
+.password-modal-card h2 {
+    margin: 0;
+    color: #fff;
+    font-size: 24px;
+    letter-spacing: -0.04em;
+}
+
+.password-modal-card > p {
+    margin: 10px 0 0;
+    color: #a9bdca;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.55;
 }
 
 .password-security-note,

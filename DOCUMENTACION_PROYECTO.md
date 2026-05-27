@@ -147,9 +147,12 @@ La URL base y rutas B2B publicas de Fastevo estan centralizadas en `config/porta
 
 ### Login B2B temporal por identidad/RTN
 
-- El login del portal muestra desde el inicio `Numero de identidad o RTN` y `Contrasena`, y envia el valor a `POST /api/portal/auth/identity`.
-- La contrasena es opcional temporalmente en frontend para clientes que aun no tienen `clients.portal_password`.
-- Si el usuario escribe contrasena, Inversiones_S&M la reenvia server-to-server a Fastevo. No se guarda localmente ni se imprime en logs.
+- El login del portal funciona por pasos sin cambiar la base visual liquid glass.
+- Paso 1 muestra solo `Numero de identidad o RTN` y el boton `Siguiente`; llama `POST /api/portal/auth/check-identity`.
+- Si `check-identity` devuelve `hasPassword=true`, paso 2 muestra `Contrasena`, mantiene la identidad precargada y el boton pasa a `Ingresar al sistema`.
+- Si `check-identity` devuelve `exists=true` y `hasPassword=false`, se abre automaticamente el modal `Crear contrasena` con el texto `Hemos detectado que aun no tiene una contrasena. Por favor cree una para continuar.`.
+- Si `check-identity` devuelve `exists=false`, no muestra contrasena y avisa `No encontramos un cliente B2B con ese numero de identidad o RTN.`.
+- Al enviar el paso de contrasena, Inversiones_S&M reenvia `identity + password` server-to-server a Fastevo. No se guarda localmente ni se imprime en logs.
 - Inversiones_S&M no consulta tablas locales de clientes. Actua como bridge y llama a Fastevo `POST /api/portal-b2b/auth/identity`.
 - Fastevo valida contra `clients.vat_number`, normalizando el valor con `preg_replace('/\D+/', '', $identity)` para aceptar guiones, espacios, puntos y slash.
 - Si no existe cliente activo o hay mas de un cliente con el mismo `vat_number` normalizado, Fastevo responde `authenticated=false` y no devuelve lista ni datos sensibles.
@@ -189,8 +192,9 @@ La URL base y rutas B2B publicas de Fastevo estan centralizadas en `config/porta
 - Si ya existe `portal_password`, no permite crear otra y muestra `Este cliente ya tiene contrasena creada.`. Reset queda como flujo separado futuro.
 - Login por identidad sigue funcionando para clientes sin `portal_password`, para no romper la transicion.
 - Si el cliente ya tiene `portal_password`, `POST /api/portal-b2b/auth/identity` exige `password` y valida con `Hash::check()` antes de emitir el token B2B.
-- La UI mantiene visible el campo `Contrasena` desde la primera carga. Si el backend responde `requiresPassword=true`, marca error en el campo y enfoca el input.
-- Despues de crear contrasena correctamente, la UI vuelve al login, deja la identidad precargada, mantiene visible el campo contrasena y enfoca ese campo.
+- La UI enfoca el campo `Contrasena` al pasar al paso 2 o despues de crear contrasena correctamente.
+- Despues de crear contrasena correctamente, la UI cierra el modal, deja la identidad precargada, muestra el campo contrasena y cambia el boton a `Ingresar al sistema`.
+- Las imagenes locales principales del login y panel se sirven desde `public/images/login-car.png` y `public/images/dashboard-engine.png` para evitar rutas fragiles en produccion.
 - Produccion ideal debe agregar una segunda validacion fuerte para crear contrasena: OTP por SMS/email, enlace firmado, codigo validado por vendedor o aprobacion comercial.
 - Logs seguros: solo `identity_present`, `identity_last4`, banderas, estado HTTP y tiempos. No imprimir RTN completo, contrasena, hash, token, correo o telefono completo.
 
