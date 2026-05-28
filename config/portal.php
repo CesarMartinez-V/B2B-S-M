@@ -4,6 +4,7 @@ return [
     'fastevo' => [
         'base_url' => 'https://dev.capgrupo.com',
         'timeout' => 15,
+        'verify_ssl' => env('PORTAL_FASTEVO_VERIFY_SSL', env('APP_ENV', 'production') !== 'local'),
         'paths' => [
             'auth_identity' => '/api/portal-b2b/auth/identity',
             'auth_check_identity' => '/api/portal-b2b/auth/check-identity',

@@ -9,8 +9,6 @@ const props = defineProps({
     brandLabel: { type: String, default: portalBrand.topLabel },
     searchPlaceholder: { type: String, default: 'Buscar socio, factura o pedido...' },
     showSearch: { type: Boolean, default: true },
-    showNotifications: { type: Boolean, default: true },
-    showSettings: { type: Boolean, default: true },
     userName: { type: String, default: portalUser.name },
     userHref: { type: String, default: portalUser.href },
     avatarSrc: { type: String, default: portalUser.avatar },
@@ -29,7 +27,7 @@ onMounted(() => {
 <template>
     <header class="portal-topbar">
         <div><strong>{{ brandLabel }}</strong><label v-if="showSearch"><span class="material-symbols-outlined">search</span><input :placeholder="searchPlaceholder" type="text"></label></div>
-        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a class="portal-user-link" :href="userHref" @click.prevent="navigateTo(userHref)"><span>{{ resolvedUserName }}</span><img :src="resolvedAvatarSrc" :alt="resolvedUserName"></a></nav>
+        <nav><button class="theme-toggle" type="button" :aria-label="isLightMode ? 'Activar modo oscuro' : 'Activar modo claro'" @click="toggleTheme"><span class="material-symbols-outlined">{{ isLightMode ? 'dark_mode' : 'light_mode' }}</span></button><a class="portal-user-link" :href="userHref" @click.prevent="navigateTo(userHref)"><span>{{ resolvedUserName }}</span><img :src="resolvedAvatarSrc" :alt="resolvedUserName"></a></nav>
     </header>
 </template>
 

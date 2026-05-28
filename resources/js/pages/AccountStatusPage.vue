@@ -142,21 +142,66 @@ const exportAccount = () => {
 };
 
 const contactSeller = () => {
-    openContactSeller({ title: 'Contactar con vendedor', reason: `Revisión de estado de cuenta. Deuda: ${accountOverview.value.debtTotal}. Crédito disponible: ${accountOverview.value.creditAvailable}.` });
+    openContactSeller({ title: 'Contactar con vendedor', reason: 'Revisión de estado de cuenta.', whatsappMessage: 'Hola, necesito apoyo con mi estado de cuenta en el Portal B2B.' });
 };
 
 const showReceipt = () => {
     if (!accountOverview.value.lastPaymentDate || accountOverview.value.lastPayment === 'Sin pagos recientes') {
-        openModal({ title: 'Comprobante no disponible', message: 'Sin comprobante disponible para el último pago en la vista actual.', icon: 'payments', confirmText: 'Cerrar' });
+        openModal({
+            title: 'Comprobante no disponible',
+            message: 'Sin comprobante disponible para el último pago en la vista actual.',
+            icon: 'payments',
+            confirmText: 'Cerrar',
+            size: 'md',
+            detail: {
+                rows: [
+                    { label: 'Último pago', value: accountOverview.value.lastPayment || 'Sin pagos recientes' },
+                    { label: 'Fecha', value: accountOverview.value.lastPaymentDate || 'Sin fecha registrada' },
+                ],
+                observations: 'Para consultar comprobantes históricos se requiere habilitar un endpoint seguro de documentos en Fastevo.',
+            },
+        });
         return;
     }
 
-    openModal({ title: 'Comprobante de último pago', message: `Pago recibido: ${accountOverview.value.lastPayment}\nFecha: ${accountOverview.value.lastPaymentDate || 'Sin fecha registrada'}\nEstado: Aplicado`, icon: 'payments', confirmText: 'Cerrar' });
+    openModal({
+        title: 'Comprobante de último pago',
+        message: 'Vista informativa del último pago visible en el estado de cuenta.',
+        icon: 'payments',
+        confirmText: 'Cerrar',
+        size: 'md',
+        detail: {
+            rows: [
+                { label: 'Pago recibido', value: accountOverview.value.lastPayment },
+                { label: 'Fecha', value: accountOverview.value.lastPaymentDate || 'Sin fecha registrada' },
+                { label: 'Estado', value: 'Aplicado' },
+                { label: 'Documento', value: 'Endpoint seguro pendiente' },
+            ],
+            observations: 'Para descargar comprobantes se requiere habilitar un endpoint firmado de documentos en Fastevo.',
+        },
+    });
     info('Comprobante abierto');
 };
 
 const showMovement = (row) => {
-    openModal({ title: `Movimiento ${row.id || row.title}`, message: movementLines(row).join('\n'), icon: 'visibility', confirmText: 'Cerrar' });
+    openModal({
+        title: `Movimiento ${row.id || row.title}`,
+        message: 'Detalle financiero visible para consulta B2B.',
+        icon: 'visibility',
+        confirmText: 'Cerrar',
+        size: 'lg',
+        detail: {
+            rows: [
+                { label: 'ID', value: row.id || row.title },
+                { label: 'Fecha', value: row.date || row.meta || 'Sin fecha' },
+                { label: 'Tipo', value: row.type || row.status || 'Movimiento' },
+                { label: 'Monto', value: row.amount || 'L. 0.00' },
+                { label: 'Estado', value: row.status || 'Sin estado' },
+                { label: 'Origen', value: 'Fastevo B2B' },
+            ],
+            observations: movementLines(row).join('\n'),
+        },
+    });
 };
 
 const loadMore = () => {

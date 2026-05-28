@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useAuth } from '../../composables/useAuth.js';
 import { useConfirm } from '../../composables/useConfirm.js';
-import { useModal } from '../../composables/useModal.js';
+import { usePortalActions } from '../../composables/usePortalActions.js';
 import { navigateTo } from '../../composables/usePortalNavigation.js';
 import { useToast } from '../../composables/useToast.js';
 import { portalBrand, portalNavItems } from '../../portalNavigation.js';
@@ -21,7 +21,7 @@ const props = defineProps({
 const navItems = computed(() => props.items.map((item) => ({ ...item, active: item.href === props.activeRoute })));
 const { logout } = useAuth();
 const { askConfirm } = useConfirm();
-const { openModal } = useModal();
+const { openSupportModal: openPortalSupportModal } = usePortalActions();
 const { success } = useToast();
 
 const openQuoteModal = () => {
@@ -33,13 +33,11 @@ const handleNavigate = (href) => {
 };
 
 const openSupportModal = () => {
-    openModal({
+    openPortalSupportModal({
         title: 'Soporte B2B',
-        message: 'Un asesor comercial puede ayudarte con pedidos, facturas o cotizaciones. Tu solicitud quedará registrada localmente para seguimiento comercial.',
-        icon: 'support_agent',
-        confirmText: 'Registrar solicitud',
-        cancelText: 'Cancelar',
-        onConfirm: () => success('Solicitud de soporte registrada.'),
+        reference: 'Menú lateral',
+        reason: 'Consulta general del portal',
+        whatsappMessage: 'Hola, necesito soporte con el Portal B2B de Inversiones S&M.',
     });
 };
 

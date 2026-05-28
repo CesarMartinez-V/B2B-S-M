@@ -41,9 +41,11 @@ class PortalAuthController extends Controller
 
         $endpoint = rtrim((string) config('portal.fastevo.base_url'), '/')
             .'/'.ltrim((string) config('portal.fastevo.paths.auth_identity'), '/');
+        $baseHost = parse_url((string) config('portal.fastevo.base_url'), PHP_URL_HOST) ?: 'unknown';
 
         try {
             $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
+                ->withOptions(['verify' => (bool) config('portal.fastevo.verify_ssl', true)])
                 ->acceptJson()
                 ->post($endpoint, array_filter([
                     'identity' => $identityRaw,
@@ -52,11 +54,17 @@ class PortalAuthController extends Controller
 
             if (! $response->successful() || ! str_contains((string) $response->header('Content-Type'), 'application/json')) {
                 Log::warning('Portal identity auth ERP request rejected.', array_merge($context, [
+                    'base_host' => $baseHost,
+                    'path_key' => 'auth_identity',
+                    'ssl_verify' => (bool) config('portal.fastevo.verify_ssl', true),
                     'status' => $response->status(),
+                    'content_type' => (string) $response->header('Content-Type'),
                     'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
                 ]));
 
-                return response()->json($this->authResponse(false));
+                return response()->json($this->authResponse(false, [
+                    'message' => 'No se pudo validar la identidad en este momento.',
+                ]), 502);
             }
 
             $payload = $response->json();
@@ -104,11 +112,16 @@ class PortalAuthController extends Controller
             ], $payload['meta'] ?? []));
         } catch (\Throwable $exception) {
             Log::warning('Portal identity auth exception.', array_merge($context, [
+                'base_host' => $baseHost,
+                'path_key' => 'auth_identity',
+                'ssl_verify' => (bool) config('portal.fastevo.verify_ssl', true),
                 'error' => $exception->getMessage(),
                 'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]));
 
-            return response()->json($this->authResponse(false));
+            return response()->json($this->authResponse(false, [
+                'message' => 'No se pudo validar la identidad en este momento.',
+            ]), 502);
         }
     }
 
@@ -197,15 +210,21 @@ class PortalAuthController extends Controller
     {
         $endpoint = rtrim((string) config('portal.fastevo.base_url'), '/')
             .'/'.ltrim((string) config("portal.fastevo.paths.{$pathKey}"), '/');
+        $baseHost = parse_url((string) config('portal.fastevo.base_url'), PHP_URL_HOST) ?: 'unknown';
 
         try {
             $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
+                ->withOptions(['verify' => (bool) config('portal.fastevo.verify_ssl', true)])
                 ->acceptJson()
                 ->post($endpoint, $payload);
 
             if (! str_contains((string) $response->header('Content-Type'), 'application/json')) {
                 Log::warning("Portal password {$operation} ERP response was not JSON.", array_merge($context, [
+                    'base_host' => $baseHost,
+                    'path_key' => $pathKey,
+                    'ssl_verify' => (bool) config('portal.fastevo.verify_ssl', true),
                     'status' => $response->status(),
+                    'content_type' => (string) $response->header('Content-Type'),
                     'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
                 ]));
 
@@ -216,13 +235,20 @@ class PortalAuthController extends Controller
             }
 
             Log::info("Portal password {$operation} ERP request completed.", array_merge($context, [
+                'base_host' => $baseHost,
+                'path_key' => $pathKey,
+                'ssl_verify' => (bool) config('portal.fastevo.verify_ssl', true),
                 'status' => $response->status(),
+                'content_type' => (string) $response->header('Content-Type'),
                 'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]));
 
             return response()->json($response->json(), $response->status());
         } catch (\Throwable $exception) {
             Log::warning("Portal password {$operation} ERP request exception.", array_merge($context, [
+                'base_host' => $baseHost,
+                'path_key' => $pathKey,
+                'ssl_verify' => (bool) config('portal.fastevo.verify_ssl', true),
                 'error' => $exception->getMessage(),
                 'total_elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]));

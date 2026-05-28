@@ -3,11 +3,13 @@ import AppShell from '../components/portal/AppShell.vue';
 import { useModal } from '../composables/useModal.js';
 import { usePortalActions } from '../composables/usePortalActions.js';
 import { useToast } from '../composables/useToast.js';
+import { useWhatsAppContact } from '../composables/useWhatsAppContact.js';
 import { catalogService } from '../services/catalogService.js';
 
 const { openModal } = useModal();
 const { goToCatalog, openContactSeller } = usePortalActions();
 const { success } = useToast();
+const { openWhatsApp } = useWhatsAppContact();
 
 const avatarDesktop = 'https://lh3.googleusercontent.com/aida-public/AB6AXuD2P73pJk1BxV6a2wDUDn93EJKZ--c4NXIstuINZcot5N9dwQYkw7Nw7aowrRr4ubiU4wECiHYesFoXOeDHmj9QEk-4vOh57FWneCzyWlWkuybA-3Exd-SyQlEGSiUZgVf73f221Av9Ey9jS9oLiz1XIPzusz5495NcZ0qRVV7aucxH48CF_9FcBJF9qWqLTIPfFUXGXe9kKbLpLXLixGSoS3UjXq2nToxV8qNMj_Dx6oAjft5krBpmKId5rh5_GZZksNXaKBHnYqM';
 const avatarMobile = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBfRGJ1UlMy0R7q41G2krXs_WdS6Sw5mqOSmAF64MYYRSmukD13SucSG0pPtHj5kbbrb372uYOFUkqdUId1Y9BftAVRKmu-QNyy2G7ni-gN1Syo40arZeC5GIRUsX0_ScZYeG4sb69tnuxoktO8rFGWD-rYz_JXN96FbLwQGE6B4hO-ffkIQxhashXl_9KNfuiDaUzBNUveuwfCr45lhEFJk4w9ZqfbpcYncU_1TA0hjTXj7wNaDncWkbt53YowKMvnHXMHF9xwNXs';
@@ -41,7 +43,7 @@ const handleBrandCta = (label) => {
         return;
     }
 
-    openContactSeller({ title: label, reason: 'Consulta sobre marcas especiales y condiciones comerciales.' });
+    openContactSeller({ title: label, reason: 'Consulta sobre marcas especiales y condiciones comerciales.', whatsappMessage: 'Hola, necesito información sobre marcas especiales en el Portal B2B.' });
 };
 
 const openBrandCatalog = (brand) => {
@@ -55,11 +57,14 @@ const openBrandCatalog = (brand) => {
 
     openModal({
         title: brand.name,
-        message: 'No hay productos disponibles para esta marca en los filtros reales cargados. Podemos registrar una consulta para revisión comercial.',
+        message: 'No hay productos disponibles para esta marca en los filtros reales cargados. Puede contactar a un asesor por WhatsApp.',
         icon: 'handshake',
-        confirmText: 'Registrar interés',
+        confirmText: 'Enviar por WhatsApp',
         cancelText: 'Cerrar',
-        onConfirm: () => success('Interés registrado para seguimiento comercial.'),
+        onConfirm: () => {
+            openWhatsApp(`Hola, necesito información sobre la marca ${brandName} en el Portal B2B.`);
+            success('Solicitud abierta en WhatsApp.');
+        },
     });
 };
 </script>

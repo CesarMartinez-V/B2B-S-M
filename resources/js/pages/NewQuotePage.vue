@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue';
 import AppShell from '../components/portal/AppShell.vue';
 import { useConfirm } from '../composables/useConfirm.js';
+import { useModal } from '../composables/useModal.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
 import { useToast } from '../composables/useToast.js';
+import { useWhatsAppContact } from '../composables/useWhatsAppContact.js';
 import { fetchProfile, getProfileCompany, getProfileCommercial, getProfileUser } from '../services/profileService.js';
 import { quoteService } from '../services/quoteService.js';
 import { useCatalogStore } from '../stores/catalogStore.js';
@@ -18,6 +20,8 @@ const catalogStore = useCatalogStore();
 const quoteStore = useQuoteStore();
 const { success, info } = useToast();
 const { askConfirm } = useConfirm();
+const { openModal } = useModal();
+const { openWhatsApp } = useWhatsAppContact();
 const QUOTE_MAX_QTY = 100;
 
 const search = ref('');
@@ -142,7 +146,7 @@ function updateQty(item, event) {
 
     if (!quoteCart.updateQty(item.id || item.sku, nextQty)) {
         event.target.value = item.quantity || 1;
-        info(`La cantidad maxima para cotizar es ${QUOTE_MAX_QTY}.`, 'Cantidad no disponible');
+        info(`La cantidad máxima para cotizar es ${QUOTE_MAX_QTY}.`, 'Cantidad no disponible');
         return;
     }
 
@@ -184,14 +188,29 @@ function saveTemporaryRequest() {
 
     quoteStore.clearQuoteCache();
     success('Solicitud de cotización preparada. La creación real en ERP queda pendiente de aprobación.');
-    askConfirm({
+    openModal({
         title: 'Solicitud preparada',
-        message: `${quote.id} fue guardada localmente. No se creó documento real en ERP. ¿Desea vaciar el carrito temporal ahora?`,
-        confirmText: 'Vaciar carrito',
-        cancelText: 'Conservar',
-        onConfirm: () => quoteCart.clear(),
+        message: `${quote.id} fue guardada localmente. No se creó documento real en ERP. Puede enviarla por WhatsApp para revisión de un asesor.`,
+        icon: 'outgoing_mail',
+        confirmText: 'Enviar por WhatsApp',
+        cancelText: 'Cerrar',
+        size: 'md',
+        detail: {
+            rows: [
+                { label: 'Solicitud', value: quote.id },
+                { label: 'Estado', value: 'Temporal local' },
+                { label: 'ERP', value: 'No enviado' },
+                { label: 'Total interno', value: formatCurrency(quote.amount) },
+            ],
+            observations: observations.value.trim() || 'Sin observaciones.',
+        },
+        onConfirm: () => {
+            openWhatsApp('Hola, preparé una solicitud de cotización en el Portal B2B y necesito que un asesor la revise.');
+            quoteCart.clear();
+            success('Solicitud abierta en WhatsApp.');
+            navigateTo('/cotizaciones');
+        },
     });
-    navigateTo('/cotizaciones');
 }
 
 onMounted(() => {
@@ -264,7 +283,7 @@ onMounted(() => {
                                 <p v-if="formErrors.observations" class="field-error">{{ formErrors.observations }}</p>
                                 <button type="button" class="primary-btn full" :disabled="!canSubmit" @click="saveTemporaryRequest"><span class="material-symbols-outlined">outgoing_mail</span>Guardar solicitud</button>
                                 <button type="button" class="ghost-btn full" @click="navigateTo('/cotizaciones')">Volver a cotizaciones</button>
-                                <p class="safe-note"><span class="material-symbols-outlined">lock</span>No llama create-proforma, no crea invoice real y no modifica inventario.</p>
+                                <p class="safe-note"><span class="material-symbols-outlined">lock</span>No llama endpoints de proforma, no crea invoice real y no modifica inventario.</p>
                             </section>
                         </aside>
                     </section>

@@ -8,12 +8,14 @@ const modal = reactive({
     confirmText: 'Aceptar',
     cancelText: '',
     size: 'md',
+    scrollable: true,
+    closeOnBackdrop: true,
     detail: null,
     onConfirm: null,
 });
 
 export const useModal = () => {
-    const openModal = ({ title = '', message = '', icon = 'info', confirmText = 'Aceptar', cancelText = '', size = 'md', detail = null, onConfirm = null } = {}) => {
+    const openModal = ({ title = '', message = '', icon = 'info', confirmText = 'Aceptar', cancelText = '', size = 'md', scrollable = true, closeOnBackdrop = true, detail = null, onConfirm = null } = {}) => {
         modal.open = true;
         modal.title = title;
         modal.message = message;
@@ -21,6 +23,8 @@ export const useModal = () => {
         modal.confirmText = confirmText;
         modal.cancelText = cancelText;
         modal.size = size;
+        modal.scrollable = scrollable;
+        modal.closeOnBackdrop = closeOnBackdrop;
         modal.detail = detail;
         modal.onConfirm = onConfirm;
     };
@@ -28,7 +32,13 @@ export const useModal = () => {
     const closeModal = () => {
         modal.open = false;
         modal.detail = null;
+        modal.scrollable = true;
+        modal.closeOnBackdrop = true;
         modal.onConfirm = null;
+    };
+
+    const closeModalFromBackdrop = () => {
+        if (modal.closeOnBackdrop) closeModal();
     };
 
     const confirmModal = () => {
@@ -42,6 +52,7 @@ export const useModal = () => {
         modal,
         openModal,
         closeModal,
+        closeModalFromBackdrop,
         confirmModal,
     };
 };

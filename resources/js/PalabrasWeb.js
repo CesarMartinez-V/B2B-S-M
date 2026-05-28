@@ -94,8 +94,6 @@ export const PalabrasWeb = {
             initials: 'RM',
         },
         actions: {
-            notifications: 'Ver notificaciones',
-            settings: 'Abrir configuración',
             newQuote: 'Nueva Cotización',
         },
         sections: {

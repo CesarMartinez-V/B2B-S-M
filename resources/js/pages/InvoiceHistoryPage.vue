@@ -95,12 +95,30 @@ const invoiceLines = (invoice) => [
 ];
 
 const showInvoice = (invoice) => {
-    openModal({ title: `Detalle ${invoice.number}`, message: invoiceLines(invoice).join('\n'), icon: 'receipt_long', confirmText: 'Cerrar' });
+    openModal({
+        title: `Detalle ${invoice.number}`,
+        message: 'Documento sincronizado para consulta. Las descargas usan impresión local hasta habilitar endpoint seguro de documentos.',
+        icon: 'receipt_long',
+        confirmText: 'Cerrar',
+        size: 'lg',
+        detail: {
+            badge: invoice.status || 'Sin estado',
+            rows: [
+                { label: 'Documento', value: invoice.number },
+                { label: 'Fecha', value: invoice.date || 'Sin fecha' },
+                { label: 'Vencimiento', value: invoice.due || 'Sin vencimiento' },
+                { label: 'Estado', value: invoice.status || 'Sin estado' },
+                { label: 'Total', value: invoice.total || 'L. 0.00' },
+                { label: 'Vendedor', value: invoice.seller || 'Asignado por confirmar' },
+            ],
+            observations: invoiceLines(invoice).join('\n'),
+        },
+    });
     info(`Detalle abierto para ${invoice.number}`);
 };
 
 const contactSeller = (invoice) => {
-    openContactSeller({ title: `Contactar a ${invoice.seller || 'vendedor asignado'}`, document: invoice.number, reason: `Consulta sobre preforma/factura por ${invoice.total}.` });
+    openContactSeller({ title: `Contactar a ${invoice.seller || 'vendedor asignado'}`, document: invoice.number, reason: `Consulta sobre preforma/factura por ${invoice.total}.`, whatsappMessage: `Hola, necesito apoyo con el documento ${invoice.number} en el Portal B2B.` });
 };
 
 const exportInvoice = (invoice) => {
@@ -149,7 +167,7 @@ const exportHistory = () => {
                     <header>
                         <div>
                             <p>Ledger B2B</p>
-                            <h2>Movimientos de facturacion</h2>
+                            <h2>Movimientos de facturación</h2>
                         </div>
                         <span>{{ isRefreshing ? 'Actualizando...' : 'Actualizado' }}</span>
                     </header>

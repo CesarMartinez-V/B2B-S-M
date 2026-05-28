@@ -7,6 +7,7 @@ import { useConfirm } from '../composables/useConfirm.js';
 import { useModal } from '../composables/useModal.js';
 import { useToast } from '../composables/useToast.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
+import { useWhatsAppContact } from '../composables/useWhatsAppContact.js';
 import { quoteService } from '../services/quoteService.js';
 import { useQuoteStore } from '../stores/quoteStore.js';
 import { formatCurrency } from '../utils/currency.js';
@@ -40,6 +41,7 @@ const normalizeStatus = (status) => {
 const { openModal } = useModal();
 const { success, info } = useToast();
 const { askConfirm } = useConfirm();
+const { openWhatsApp } = useWhatsAppContact();
 const quoteCart = useQuoteCartStore();
 const quoteStore = useQuoteStore();
 const quoteCartItems = quoteCart.items;
@@ -148,7 +150,7 @@ const updateTempQty = (item, event) => {
     const qty = Number(event.target.value) || 1;
     if (!quoteCart.updateQty(item.id || item.sku, qty)) {
         event.target.value = item.quantity || 1;
-        info('La cantidad maxima para cotizar es 100.', 'Cantidad no disponible');
+        info('La cantidad máxima para cotizar es 100.', 'Cantidad no disponible');
         return;
     }
 
@@ -179,18 +181,19 @@ const submitTemporaryRequest = () => {
 
     openModal({
         title: 'Enviar solicitud temporal',
-        message: `Se preparará una solicitud local con ${cart.items.length} producto(s) por ${formatCurrency(quoteCartTotal.value)}.\nLa creación real en ERP queda pendiente de aprobación.`,
+        message: `Se preparará una solicitud local con ${cart.items.length} producto(s) por ${formatCurrency(quoteCartTotal.value)} y se abrirá WhatsApp para revisión de un asesor.\nLa creación real en ERP queda pendiente de aprobación.`,
         icon: 'outgoing_mail',
-        confirmText: 'Preparar solicitud',
+        confirmText: 'Enviar por WhatsApp',
         cancelText: 'Cancelar',
         onConfirm: () => {
             sendingTemporaryRequest.value = true;
             const quote = quoteService.submitTemporaryRequest(quoteService.createQuoteFromCart(cart));
             quotes.value = [quote, ...quotes.value.filter((item) => item.id !== quote.id && item.temp_quote_id !== quote.temp_quote_id && item.cart_signature !== quote.cart_signature)];
+            openWhatsApp('Hola, preparé una solicitud de cotización en el Portal B2B y necesito que un asesor la revise.');
             quoteCart.clear();
             activeTab.value = 'all';
             sendingTemporaryRequest.value = false;
-            success('Solicitud preparada. No se creó documento real en ERP.');
+            success('Solicitud preparada y abierta en WhatsApp. No se creó documento real en ERP.');
         },
     });
 };

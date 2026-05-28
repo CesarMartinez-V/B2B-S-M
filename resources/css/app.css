@@ -158,8 +158,18 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
     font: inherit;
+}
+
+input,
+select,
+textarea {
+    appearance: none;
+    -webkit-appearance: none;
+    outline: 0;
+    box-shadow: none;
 }
 
 select,
@@ -863,6 +873,28 @@ button:disabled,
     border: 1px solid var(--portal-input-border) !important;
     background: var(--portal-input-bg) !important;
     color: var(--portal-text) !important;
+    caret-color: var(--portal-primary);
+}
+
+:where(input, select, textarea) {
+    border-radius: 12px;
+}
+
+:where(.glass-input, .desktop-input, .mobile-input, .catalog-search, .mobile-search, .mobile-catalog-search, .top-search, .portal-topbar label, .filter-select, .mobile-account-search) :where(input, textarea) {
+    border: 0 !important;
+    background: transparent !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+:where(input, textarea):-webkit-autofill,
+:where(input, textarea):-webkit-autofill:hover,
+:where(input, textarea):-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--portal-text) !important;
+    caret-color: var(--portal-primary) !important;
+    transition: background-color 999999s ease-in-out 0s;
+    -webkit-box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset !important;
+            box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset !important;
 }
 
 .glass-button {
@@ -981,7 +1013,7 @@ button:disabled,
     box-shadow: var(--portal-shadow-glass) !important;
 }
 
-.portal-light :where(.app-shell, .dashboard-page, .catalog-page, .brands-page, .orders-page, .account-page, .quotes-page, .stitch-login) {
+.portal-light :where(.app-shell, .dashboard-page, .catalog-page, .brands-page, .orders-page, .account-page, .quotes-page) {
     background:
         radial-gradient(circle at 12% 8%, rgba(54, 182, 226, 0.16), transparent 30%),
         radial-gradient(circle at 88% 2%, rgba(127, 90, 215, 0.12), transparent 28%),
@@ -1169,6 +1201,12 @@ body.portal-light .app-shell :is(input, select, textarea, .catalog-search, .mobi
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(45, 77, 108, 0.07) !important;
 }
 
+body.portal-light .app-shell :is(.catalog-search, .mobile-search, .mobile-catalog-search, .portal-topbar label, .filter-select, .mobile-account-search) :is(input, textarea) {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 body.portal-light .app-shell :is(button, .glass-button, .apply-filter, .export-button, .pay, .new-quote, .desktop-submit, .mobile-submit) {
     border-color: rgba(37, 99, 235, 0.24) !important;
     background: linear-gradient(135deg, rgba(37, 99, 235, 0.11), rgba(255, 255, 255, 0.62)) !important;
@@ -1211,7 +1249,7 @@ body.portal-light .app-shell :is(.portal-sidebar, .portal-topbar, .portal-mobile
     -webkit-backdrop-filter: blur(32px) saturate(175%) !important;
 }
 
-body.portal-light :is(.dashboard-page, .catalog-page, .brands-page, .orders-page, .account-page, .quotes-page, .stitch-login) {
+body.portal-light :is(.dashboard-page, .catalog-page, .brands-page, .orders-page, .account-page, .quotes-page) {
     background:
         radial-gradient(circle at 8% 8%, rgba(37, 99, 235, 0.13), transparent 30%),
         radial-gradient(circle at 84% 0%, rgba(139, 92, 246, 0.14), transparent 28%),
@@ -1236,6 +1274,84 @@ body.portal-light .portal-sidebar .portal-new-quote {
 
 body.portal-light .portal-sidebar footer {
     margin-top: 0 !important;
+}
+
+/* Login is an isolated dark screen and must not inherit portal light/dark palettes. */
+html.login-page-isolated,
+body.login-page-isolated,
+body.login-page-isolated.portal-light,
+body.login-page-isolated[data-theme='light'] {
+    color-scheme: dark !important;
+    background: #0a0e1a !important;
+    --portal-bg: #0a0e1a !important;
+    --portal-text: #e0e8f0 !important;
+    --portal-text-strong: #ffffff !important;
+    --portal-text-muted: #a0b4c4 !important;
+    --portal-muted: #a0b4c4 !important;
+    --portal-primary: #7dd3fc !important;
+    --portal-primary-strong: #38bdf8 !important;
+    --portal-input-bg: rgba(15, 23, 42, 0.72) !important;
+    --portal-input-border: rgba(125, 211, 252, 0.18) !important;
+    --portal-focus-ring: 0 0 0 3px rgba(125, 211, 252, 0.18) !important;
+}
+
+body.login-page-isolated .stitch-login,
+body.login-page-isolated.portal-light .stitch-login,
+body.login-page-isolated[data-theme='light'] .stitch-login {
+    background: #0a0e1a !important;
+    color: #e0e8f0 !important;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-card, .mobile-card) {
+    border-color: rgba(125, 211, 252, 0.15) !important;
+    background: rgba(15, 21, 36, 0.45) !important;
+    color: #e0e8f0 !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37) !important;
+}
+
+body.login-page-isolated .stitch-login :is(h1, h2, h3, strong, b) {
+    color: #ffffff !important;
+    text-shadow: 0 0 12px rgba(125, 211, 252, 0.28) !important;
+}
+
+body.login-page-isolated .stitch-login :is(p, small, span, label, a) {
+    color: inherit;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-brand p, .mobile-subtitle, .desktop-field label, .desktop-field-hint, .desktop-remember, .mobile-field-row > span, .mobile-remember, .desktop-links, .mobile-footer-actions p) {
+    color: #a0b4c4 !important;
+}
+
+body.login-page-isolated .stitch-login :is(a, .desktop-links a, .mobile-footer-actions a) {
+    color: #7dd3fc !important;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-input, .mobile-input, .liquid-glass, .glass-input) {
+    border-color: rgba(125, 211, 252, 0.16) !important;
+    background: linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(200, 160, 240, 0.05)) !important;
+    color: #e0e8f0 !important;
+    box-shadow: none !important;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-input, .mobile-input, .liquid-glass, .glass-input):focus-within {
+    border-color: rgba(125, 211, 252, 0.5) !important;
+    box-shadow: 0 0 15px rgba(125, 211, 252, 0.2) !important;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-input, .mobile-input) input {
+    border: 0 !important;
+    background: transparent !important;
+    color: #e0e8f0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+    caret-color: #7dd3fc !important;
+}
+
+body.login-page-isolated .stitch-login :is(.desktop-submit, .mobile-submit) {
+    border-color: rgba(125, 211, 252, 0.3) !important;
+    background: linear-gradient(90deg, rgba(125, 211, 252, 0.5), rgba(200, 160, 240, 0.5), rgba(125, 211, 252, 0.5)) !important;
+    color: #7dd3fc !important;
+    box-shadow: none !important;
 }
 
 /* Light-mode liquid glass normalization for scoped page styles. */

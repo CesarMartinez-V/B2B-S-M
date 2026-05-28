@@ -1,9 +1,10 @@
 <script setup>
-import { nextTick, reactive, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useAuth } from '../composables/useAuth.js';
 import { useModal } from '../composables/useModal.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
 import { useToast } from '../composables/useToast.js';
+import { useWhatsAppContact } from '../composables/useWhatsAppContact.js';
 import { PalabrasWeb } from '../PalabrasWeb.js';
 
 const words = PalabrasWeb.auth;
@@ -11,6 +12,7 @@ const backgroundImage = '/images/login-car.png';
 const { login } = useAuth();
 const { openModal } = useModal();
 const { error, success } = useToast();
+const { openWhatsApp } = useWhatsAppContact();
 const loading = ref(false);
 const checkingPasswordIdentity = ref(false);
 const creatingPassword = ref(false);
@@ -50,6 +52,25 @@ const passwordForm = reactive({
     identity: '',
     password: '',
     password_confirmation: '',
+});
+
+const closeCreatePasswordModal = () => {
+    createPasswordModalOpen.value = false;
+};
+
+const handleKeydown = (event) => {
+    if (event.key === 'Escape' && createPasswordModalOpen.value) closeCreatePasswordModal();
+};
+
+onMounted(() => {
+    window.addEventListener('keydown', handleKeydown);
+    document.body.classList.add('login-page-isolated');
+    document.documentElement.classList.add('login-page-isolated');
+});
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeydown);
+    document.body.classList.remove('login-page-isolated');
+    document.documentElement.classList.remove('login-page-isolated');
 });
 
 const validate = (values, mode = 'desktop') => {
@@ -110,6 +131,12 @@ const handleIdentityStep = async (mode = 'desktop') => {
 
     try {
         const result = await postPortalAuth('/api/portal/auth/check-identity', { identity });
+
+        if (!result.ok) {
+            error('No se pudo validar la identidad en este momento.');
+            return;
+        }
+
         const data = result.data?.data || {};
 
         if (!data.exists) {
@@ -239,6 +266,12 @@ const checkPasswordIdentity = async () => {
 
     try {
         const result = await postPortalAuth('/api/portal/auth/check-identity', { identity: passwordForm.identity.trim() });
+
+        if (!result.ok) {
+            error('No se pudo validar la identidad en este momento.');
+            return;
+        }
+
         const data = result.data?.data || {};
 
         if (!data.exists) {
@@ -325,6 +358,10 @@ const submitPasswordCreation = async () => {
 };
 
 const openHelp = (type) => {
+    const whatsappMessages = {
+        access: 'Hola, necesito solicitar acceso B2B al Portal B2B de Inversiones S&M.',
+        support: 'Hola, necesito soporte con el Portal B2B de Inversiones S&M.',
+    };
     const messages = {
         forgot: 'Ingresa tu correo corporativo y un asesor B2B validará el restablecimiento de acceso.',
         access: 'Tu solicitud de acceso quedará registrada para revisión comercial.',
@@ -339,9 +376,22 @@ const openHelp = (type) => {
         title: type === 'forgot' ? 'Recuperar contraseña' : type === 'access' ? 'Solicitar acceso' : type === 'language' ? 'Idioma del portal' : type === 'privacy' ? 'Privacidad' : type === 'terms' ? 'Términos' : type === 'biometric' ? 'Acceso biométrico' : 'Soporte de acceso',
         message: messages[type] || messages.support,
         icon: type === 'language' ? 'language' : type === 'biometric' ? 'fingerprint' : 'support_agent',
-        confirmText: 'Registrar',
+        confirmText: whatsappMessages[type] ? 'Enviar por WhatsApp' : 'Entendido',
         cancelText: 'Cerrar',
-        onConfirm: () => success('Solicitud registrada correctamente.'),
+        size: 'md',
+        detail: {
+            rows: [
+                { label: 'Acción', value: type === 'privacy' || type === 'terms' ? 'Información legal pendiente' : 'Solicitud local' },
+                { label: 'ERP', value: 'Sin cambios reales' },
+            ],
+            observations: whatsappMessages[type] || 'Esta modal no expone credenciales, RTN completo ni tokens.',
+        },
+        onConfirm: () => {
+            if (whatsappMessages[type]) {
+                openWhatsApp(whatsappMessages[type]);
+                success('Solicitud abierta en WhatsApp.');
+            }
+        },
     });
 };
 </script>
@@ -520,9 +570,9 @@ const openHelp = (type) => {
             </div>
         </section>
 
-        <div v-if="createPasswordModalOpen" class="password-modal-backdrop" @click.self="createPasswordModalOpen = false">
+        <div v-if="createPasswordModalOpen" class="password-modal-backdrop" @click.self="closeCreatePasswordModal">
             <section class="password-modal-card" role="dialog" aria-modal="true" aria-label="Crear contraseña B2B">
-                <button class="password-modal-close" type="button" aria-label="Cerrar" @click="createPasswordModalOpen = false">
+                <button class="password-modal-close" type="button" aria-label="Cerrar" @click="closeCreatePasswordModal">
                     <span class="material-symbols-outlined">close</span>
                 </button>
                 <span class="password-modal-icon material-symbols-outlined">lock_reset</span>
@@ -604,6 +654,119 @@ const openHelp = (type) => {
     color: #e0e8f0;
     background: #0a0e1a;
     font-family: Inter, sans-serif;
+    color-scheme: dark;
+    --portal-bg: #0a0e1a;
+    --portal-text: #e0e8f0;
+    --portal-text-muted: #a0b4c4;
+    --portal-text-strong: #ffffff;
+    --portal-primary: #7dd3fc;
+    --portal-glass-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(8, 13, 26, 0.86));
+    --portal-glass-border: rgba(125, 211, 252, 0.16);
+    --portal-glass-border-strong: rgba(125, 211, 252, 0.28);
+    --portal-input-bg: rgba(15, 23, 42, 0.72);
+    --portal-shadow-glass: 0 30px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:global(html.login-page-isolated),
+:global(body.login-page-isolated),
+:global(html.login-page-isolated.portal-light),
+:global(body.login-page-isolated.portal-light),
+:global(html.login-page-isolated[data-theme='light']),
+:global(body.login-page-isolated[data-theme='light']) {
+    background: #0a0e1a !important;
+    color-scheme: dark !important;
+    --portal-bg: #0a0e1a !important;
+    --portal-bg-deep: #030711 !important;
+    --portal-text: #e0e8f0 !important;
+    --portal-text-muted: #a0b4c4 !important;
+    --portal-text-strong: #ffffff !important;
+    --portal-muted: #a0b4c4 !important;
+    --portal-primary: #7dd3fc !important;
+    --portal-primary-strong: #38bdf8 !important;
+    --portal-glass-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 13, 26, 0.94)) !important;
+    --portal-glass-border: rgba(125, 211, 252, 0.18) !important;
+    --portal-glass-border-strong: rgba(125, 211, 252, 0.3) !important;
+    --portal-input-bg: rgba(15, 23, 42, 0.72) !important;
+    --portal-input-border: rgba(125, 211, 252, 0.18) !important;
+    --portal-focus-ring: 0 0 0 3px rgba(125, 211, 252, 0.18) !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login),
+:global(body.login-page-isolated[data-theme='light'] .stitch-login),
+:global(body.login-page-isolated.portal-dark .stitch-login),
+:global(body.login-page-isolated[data-theme='dark'] .stitch-login) {
+    background: #0a0e1a !important;
+    color: #e0e8f0 !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.desktop-card, .mobile-card)) {
+    border-color: rgba(125, 211, 252, 0.15) !important;
+    background: rgba(15, 21, 36, 0.45) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37) !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.desktop-input, .mobile-input, .glass-input, .liquid-glass)) {
+    border-color: rgba(125, 211, 252, 0.16) !important;
+    background: linear-gradient(135deg, rgba(125, 211, 252, 0.1), rgba(200, 160, 240, 0.05)) !important;
+    color: #e0e8f0 !important;
+    box-shadow: none !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.desktop-input, .mobile-input) input) {
+    border: 0 !important;
+    background: transparent !important;
+    color: #e0e8f0 !important;
+    box-shadow: none !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.change-identity-btn, .password-visibility, .desktop-floating-tools button, .password-modal-close)) {
+    border: 0 !important;
+    background: transparent !important;
+    color: #7dd3fc !important;
+    box-shadow: none !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login .password-visibility) {
+    color: rgba(160, 180, 196, 0.72) !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.desktop-submit, .mobile-submit)) {
+    border-color: rgba(125, 211, 252, 0.3) !important;
+    background: linear-gradient(90deg, rgba(125, 211, 252, 0.5), rgba(200, 160, 240, 0.5), rgba(125, 211, 252, 0.5)) !important;
+    color: #7dd3fc !important;
+    box-shadow: none !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login .submit-inner) {
+    background: rgba(14, 77, 110, 0.8) !important;
+    color: #7dd3fc !important;
+    box-shadow: none !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.checkbox-wrap input, .mobile-remember input)) {
+    width: 16px !important;
+    height: 16px !important;
+    border: 1px solid rgba(125, 211, 252, 0.24) !important;
+    background: rgba(2, 6, 23, 0.72) !important;
+    box-shadow: none !important;
+    accent-color: #7dd3fc !important;
+}
+
+:global(body.login-page-isolated.portal-light .stitch-login :where(.checkbox-wrap input:checked, .mobile-remember input:checked)) {
+    background: #7dd3fc !important;
+}
+
+:global(.login-page-isolated .modal-card) {
+    color-scheme: dark;
+    --portal-text: #e0e8f0;
+    --portal-text-muted: #a0b4c4;
+    --portal-text-strong: #ffffff;
+    --portal-primary: #7dd3fc;
+    --portal-glass-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 13, 26, 0.94));
+    --portal-glass-border: rgba(125, 211, 252, 0.18);
+    --portal-glass-border-strong: rgba(125, 211, 252, 0.3);
+    --portal-input-bg: rgba(15, 23, 42, 0.74);
+    --portal-shadow-glass: 0 30px 90px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .material-symbols-outlined {
@@ -919,6 +1082,20 @@ const openHelp = (type) => {
     line-height: 1.55;
 }
 
+@media (max-width: 767px) {
+    .password-modal-backdrop {
+        align-items: end;
+        padding: 12px 12px calc(92px + env(safe-area-inset-bottom));
+    }
+
+    .password-modal-card {
+        width: 100%;
+        max-height: calc(100dvh - 116px);
+        padding: 22px;
+        border-radius: 24px;
+    }
+}
+
 .password-security-note,
 .password-flow-message {
     margin: 0;
@@ -950,18 +1127,21 @@ const openHelp = (type) => {
     width: 100%;
     min-height: 40px;
     padding: 0 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(125, 211, 252, 0.18) !important;
     border-radius: 14px;
-    outline: none;
-    color: #f8fafc;
-    background: rgba(2, 6, 23, 0.58);
+    outline: 0 !important;
+    color: #f8fafc !important;
+    background: rgba(2, 6, 23, 0.58) !important;
+    box-shadow: none !important;
+    appearance: none;
+    -webkit-appearance: none;
     font-size: 13px;
     font-weight: 700;
 }
 
 .password-field input:focus {
-    border-color: rgba(125, 211, 252, 0.65);
-    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.12);
+    border-color: rgba(125, 211, 252, 0.65) !important;
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.12) !important;
 }
 
 .password-action {
@@ -1110,11 +1290,41 @@ const openHelp = (type) => {
     width: 100%;
     min-width: 0;
     padding: 0;
-    border: 0;
-    outline: 0;
-    color: #e0e8f0;
-    background: transparent;
+    border: 0 !important;
+    outline: 0 !important;
+    color: #e0e8f0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    appearance: none;
+    -webkit-appearance: none;
+    caret-color: #7dd3fc;
     font: inherit;
+}
+
+.desktop-input input:focus,
+.mobile-input input:focus,
+.desktop-input input:focus-visible,
+.mobile-input input:focus-visible {
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.desktop-input input:-webkit-autofill,
+.desktop-input input:-webkit-autofill:hover,
+.desktop-input input:-webkit-autofill:focus,
+.mobile-input input:-webkit-autofill,
+.mobile-input input:-webkit-autofill:hover,
+.mobile-input input:-webkit-autofill:focus,
+.password-field input:-webkit-autofill,
+.password-field input:-webkit-autofill:hover,
+.password-field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #e0e8f0 !important;
+    caret-color: #7dd3fc !important;
+    transition: background-color 999999s ease-in-out 0s;
+    -webkit-box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.01) inset !important;
+            box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.01) inset !important;
 }
 
 .desktop-input input {

@@ -6,8 +6,6 @@ import { getProfileUser } from '../../services/profileService.js';
 
 const props = defineProps({
     title: { type: String, default: portalBrand.topLabel },
-    showNotifications: { type: Boolean, default: true },
-    showSettings: { type: Boolean, default: false },
     showAvatar: { type: Boolean, default: true },
     avatarSrc: { type: String, default: portalUser.avatar },
     avatarHref: { type: String, default: portalUser.href },
@@ -21,7 +19,7 @@ const resolvedUserName = computed(() => profileUser.value.name || portalUser.nam
 <template>
     <header class="portal-mobile-top">
         <strong>{{ title }}</strong>
-        <div><span v-if="showNotifications" class="material-symbols-outlined">notifications</span><span v-if="showSettings" class="material-symbols-outlined">settings</span><a v-if="showAvatar" :href="avatarHref" @click.prevent="navigateTo(avatarHref)"><img :src="resolvedAvatarSrc" :alt="resolvedUserName"></a></div>
+        <div><a v-if="showAvatar" :href="avatarHref" @click.prevent="navigateTo(avatarHref)"><img :src="resolvedAvatarSrc" :alt="resolvedUserName"></a></div>
     </header>
 </template>
 

@@ -1,9 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import AppShell from '../components/portal/AppShell.vue';
 import { useModal } from '../composables/useModal.js';
-import { usePortalActions } from '../composables/usePortalActions.js';
 import { useToast } from '../composables/useToast.js';
+import { useWhatsAppContact } from '../composables/useWhatsAppContact.js';
 import { portalUser } from '../portalNavigation.js';
 import { getProfileActivity, getProfileClientConfigured, getProfileCommercial, getProfileCompany, getProfileEmptyMessage, getProfileFields, getProfileUser } from '../services/profileService.js';
 
@@ -19,16 +19,73 @@ const emptyMessage = computed(() => getProfileEmptyMessage());
 const profileFields = getProfileFields();
 const activity = getProfileActivity();
 const { openModal } = useModal();
-const { explainPendingIntegration } = usePortalActions();
 const { success } = useToast();
+const { openWhatsApp } = useWhatsAppContact();
+const editProfileModalOpen = ref(false);
+const editProfileForm = reactive({ email: '', phone: '', address: '', observations: '' });
+
+const resetEditProfileForm = () => {
+    editProfileForm.email = user.value.email || '';
+    editProfileForm.phone = user.value.phone || '';
+    editProfileForm.address = company.value.address || '';
+    editProfileForm.observations = '';
+};
+
+const openEditProfileModal = () => {
+    resetEditProfileForm();
+    editProfileModalOpen.value = true;
+};
+
+const closeEditProfileModal = () => {
+    editProfileModalOpen.value = false;
+};
+
+const submitProfileUpdateWhatsApp = () => {
+    const message = [
+        'Hola, solicito actualizar mis datos del Portal B2B:',
+        `Empresa: ${company.value.name || 'Cliente B2B'}`,
+        `Correo: ${editProfileForm.email || 'No registrado'}`,
+        `Teléfono: ${editProfileForm.phone || 'No registrado'}`,
+        `Dirección: ${editProfileForm.address || 'No registrada'}`,
+        `Observación: ${editProfileForm.observations || 'Sin observaciones'}`,
+    ].join(' ');
+
+    openWhatsApp(message);
+    success('Solicitud abierta en WhatsApp.');
+    closeEditProfileModal();
+};
+
+const openPasswordChangeModal = () => {
+    openModal({
+        title: 'Cambiar contraseña',
+        message: 'Para cambiar su contraseña, un asesor validará su solicitud por WhatsApp.',
+        icon: 'lock_reset',
+        confirmText: 'Solicitar cambio por WhatsApp',
+        cancelText: 'Cerrar',
+        size: 'md',
+        detail: {
+            rows: [
+                { label: 'Cliente', value: displayName.value },
+                { label: 'Empresa', value: company.value.name || 'Cliente B2B' },
+            ],
+            observations: 'Hola, necesito cambiar mi contraseña del Portal B2B.',
+        },
+        onConfirm: () => {
+            openWhatsApp('Hola, necesito cambiar mi contraseña del Portal B2B.');
+            success('Solicitud abierta en WhatsApp.');
+        },
+    });
+};
 
 const profileAction = (label) => {
-    if (label.includes('Clave') || label.includes('Contraseña')) {
-        explainPendingIntegration('Cambio de clave');
+    const normalizedLabel = label.toLowerCase();
+
+    if (normalizedLabel.includes('clave') || normalizedLabel.includes('contraseña')) {
+        openPasswordChangeModal();
         return;
     }
 
-    if (label.includes('seguridad') || label.includes('dispositivos')) {
+    if (normalizedLabel.includes('seguridad') || normalizedLabel.includes('dispositivos')) {
         openModal({
             title: 'Seguridad de cuenta',
             message: `Sesión actual del portal temporal.\nCliente: ${clientCode.value}.\nPara auditoría real de dispositivos se requiere integración con el sistema de autenticación definitivo.`,
@@ -38,14 +95,7 @@ const profileAction = (label) => {
         return;
     }
 
-    openModal({
-        title: 'Solicitud de edición de perfil',
-        message: `Se registrará una solicitud local para revisar datos del perfil B2B.\nCliente: ${displayName.value}.\nEmpresa: ${company.value.name || 'Sin nombre registrado'}.\nNo se modificará Fastevo desde esta pantalla.`,
-        icon: 'manage_accounts',
-        confirmText: 'Guardar solicitud',
-        cancelText: 'Cerrar',
-        onConfirm: () => success('Solicitud de edición registrada localmente.'),
-    });
+    openEditProfileModal();
 };
 
 </script>
@@ -65,6 +115,29 @@ const profileAction = (label) => {
             <main class="mobile-main"><section v-if="!clientConfigured" class="empty-profile glass"><span class="material-symbols-outlined">person_off</span>{{ emptyMessage }}</section><section class="mobile-card glass"><div class="avatar-ring"><img :src="avatar" :alt="displayName"></div><p>{{ partnerLevel }}</p><h1>{{ displayName }}</h1><span>{{ clientCode }}</span><div><button type="button" @click="profileAction('Solicitar edición')"><span class="material-symbols-outlined">edit</span>Solicitar edición</button><button type="button" @click="profileAction('Solicitar cambio de clave')"><span class="material-symbols-outlined">lock_reset</span>Cambio de clave</button></div></section><section class="mobile-info glass"><h2>Información</h2><article v-for="field in profileFields" :key="field.label"><span class="material-symbols-outlined">{{ field.icon }}</span><div><small>{{ field.label }}</small><strong>{{ field.value }}</strong></div></article></section><section class="mobile-credit elevated"><header><span class="material-symbols-outlined">account_balance_wallet</span><div><p>Crédito B2B</p><h3>{{ commercial.creditLimit || 'L. 0.00' }}</h3></div></header><div class="meter"><i></i></div><small>Condición: {{ commercial.creditCondition || 'Consultar' }} · Disponible {{ commercial.availableCredit || 'L. 0.00' }}</small></section><section class="quick glass"><h2>Acciones rápidas</h2><div><button type="button" @click="profileAction('Revisar seguridad')"><span class="material-symbols-outlined">security</span>Revisar seguridad</button><button type="button" @click="profileAction('Solicitar cambio de clave')"><span class="material-symbols-outlined">lock_reset</span>Cambio de clave</button></div></section><section class="mobile-activity glass"><h2>Historial</h2><article v-for="item in activity" :key="`${item.title}-${item.time}`"><span class="material-symbols-outlined">{{ item.icon }}</span><div><strong>{{ item.title }}</strong><small>{{ item.time }}</small></div></article><p v-if="!activity.length" class="activity-empty">Sin actividad reciente.</p></section></main>
         </template>
     </AppShell>
+    <Teleport to="body">
+        <div v-if="editProfileModalOpen" class="profile-edit-backdrop" @click.self="closeEditProfileModal">
+            <section class="profile-edit-modal" role="dialog" aria-modal="true" aria-label="Editar perfil B2B">
+                <button class="profile-edit-close" type="button" aria-label="Cerrar" @click="closeEditProfileModal"><span class="material-symbols-outlined">close</span></button>
+                <header>
+                    <span class="material-symbols-outlined">manage_accounts</span>
+                    <div><h2>Solicitar actualización de perfil</h2><p>No se modificará Fastevo desde esta pantalla. Se abrirá WhatsApp con los datos para validación del asesor.</p></div>
+                </header>
+                <dl class="profile-current-data">
+                    <div><dt>Cliente</dt><dd>{{ displayName }}</dd></div>
+                    <div><dt>Empresa</dt><dd>{{ company.name || 'Cliente B2B' }}</dd></div>
+                    <div><dt>Código</dt><dd>{{ clientCode }}</dd></div>
+                </dl>
+                <form class="profile-edit-form" @submit.prevent="submitProfileUpdateWhatsApp">
+                    <label><span>Correo</span><input v-model="editProfileForm.email" type="email" placeholder="correo@empresa.com"></label>
+                    <label><span>Teléfono</span><input v-model="editProfileForm.phone" type="tel" placeholder="Teléfono de contacto"></label>
+                    <label class="full"><span>Dirección</span><input v-model="editProfileForm.address" type="text" placeholder="Dirección comercial"></label>
+                    <label class="full"><span>Observación del cambio</span><textarea v-model="editProfileForm.observations" maxlength="500" rows="4" placeholder="Indique qué datos desea actualizar o validar"></textarea></label>
+                    <footer><button type="button" class="ghost" @click="closeEditProfileModal">Cerrar</button><button type="submit">Enviar por WhatsApp</button></footer>
+                </form>
+            </section>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -74,4 +147,5 @@ const profileAction = (label) => {
 @media(max-width:767px){.mobile-main{padding:92px 18px 0;display:flex;flex-direction:column;gap:20px}.mobile-card{position:relative;overflow:hidden;text-align:center;padding:28px;border-radius:24px}.mobile-card:before{content:'';position:absolute;inset:-120px -80px auto auto;width:260px;height:260px;border-radius:999px;background:rgba(125,211,252,.13);filter:blur(42px)}.avatar-ring{position:relative;width:104px;height:104px;margin:0 auto 18px;padding:3px;border-radius:30px;background:linear-gradient(135deg,#7dd3fc,#c8a0f0)}.avatar-ring img{width:100%;height:100%;object-fit:cover;border-radius:27px}.mobile-card p{margin:0;color:#7dd3fc;font-size:12px;font-weight:900;letter-spacing:.18em;text-transform:uppercase}.mobile-card h1{margin:8px 0;color:#fff;font-size:30px}.mobile-card>span{color:#a0b4c4}.mobile-card div:last-child{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}.mobile-card button,.quick button{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border:1px solid rgba(125,211,252,.25);border-radius:14px;background:rgba(125,211,252,.1);color:#7dd3fc;font-weight:800}.mobile-info,.mobile-credit,.quick,.mobile-activity{border-radius:20px;padding:22px}.mobile-info h2,.quick h2,.mobile-activity h2{margin:0 0 16px;color:#fff}.mobile-info article{display:flex;gap:12px;padding:14px 0;border-top:1px solid rgba(255,255,255,.05)}.mobile-info article:first-of-type{border-top:0}.mobile-info span{color:#7dd3fc}.mobile-info small,.mobile-credit small{display:block;color:#a0b4c4}.mobile-info strong{display:block;color:#e0e8f0}.mobile-credit header{display:flex;gap:14px;align-items:center}.mobile-credit header>span{padding:12px;border-radius:16px;background:rgba(200,160,240,.12);color:#c8a0f0}.mobile-credit p{margin:0;color:#a0b4c4;text-transform:uppercase;font-size:12px}.mobile-credit h3{margin:2px 0;color:#fff;font-size:28px}.quick div{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mobile-activity article{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid rgba(255,255,255,.05)}.mobile-activity article:first-of-type{border-top:0}.mobile-activity article>span{color:#7dd3fc}.mobile-activity small{display:block;color:#a0b4c4}}
 .wrap{width:100%!important;max-width:none!important;margin:0!important;padding:18px!important}.grid{grid-template-columns:minmax(0,1.8fr) minmax(320px,.75fr)!important;gap:clamp(16px,1.4vw,24px)!important}.lower-grid{grid-template-columns:minmax(0,.95fr) minmax(0,1.45fr)!important;gap:clamp(16px,1.4vw,24px)!important}.glass,.elevated{background:linear-gradient(135deg,rgba(18,27,45,.76),rgba(9,14,26,.58))!important;border-color:rgba(125,211,252,.18)!important;box-shadow:0 24px 70px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.07)}.hero,.info-card,.credit-card,.security,.activity{animation:portal-enter .48s ease both;transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}.info-card:hover,.credit-card:hover,.security:hover,.activity:hover{transform:translateY(-3px);border-color:rgba(125,211,252,.28)!important;box-shadow:0 30px 90px rgba(56,189,248,.1),inset 0 1px 0 rgba(255,255,255,.08)}.info-card,.credit-card,.security,.activity{padding:24px}.empty-profile{display:flex;align-items:center;gap:10px;padding:14px 18px;border-radius:18px;color:#c8a0f0;font-weight:800}.activity-empty{position:relative;z-index:1;margin:14px 0 0;color:#a0b4c4}.preferences{display:none}@media(max-width:767px){.mobile-main{padding-left:16px;padding-right:16px}.quick{display:none}}@media(min-width:768px) and (max-width:1120px){.grid,.lower-grid{grid-template-columns:1fr!important}.hero{align-items:flex-start;flex-direction:column}.field-grid{grid-template-columns:1fr}.wrap{padding:18px!important}}
 .hero,.info-card,.credit-card,.security,.activity{position:relative;overflow:hidden;border:1px solid rgba(125,211,252,.18);background:linear-gradient(135deg,rgba(28,43,64,.78),rgba(10,16,30,.62) 48%,rgba(45,38,72,.58)),radial-gradient(circle at 18% 0%,rgba(125,211,252,.18),transparent 34%),radial-gradient(circle at 92% 12%,rgba(200,160,240,.16),transparent 30%)!important;box-shadow:0 28px 90px rgba(0,0,0,.3),0 0 42px rgba(56,189,248,.075),inset 0 1px 0 rgba(255,255,255,.11)!important;backdrop-filter:blur(22px) saturate(155%)}.hero{border-radius:28px}.info-card,.credit-card,.security,.activity{border-radius:22px}.hero::after,.info-card::after,.credit-card::after,.security::after,.activity::after{position:absolute;right:-28px;top:-28px;width:132px;height:132px;border-radius:999px;content:'';background:rgba(125,211,252,.13);filter:blur(12px);pointer-events:none}.credit-card::after,.activity::after{background:rgba(200,160,240,.15)}.field{background:rgba(255,255,255,.035);border:1px solid rgba(125,211,252,.12);border-radius:14px}.hero,.info-card,.credit-card,.security,.activity{animation:portal-enter .48s ease both}.grid{animation:portal-enter .48s ease both;animation-delay:.08s}.lower-grid{animation:portal-enter .48s ease both;animation-delay:.14s}.preferences{display:none!important}
+.profile-edit-backdrop{position:fixed;inset:0;z-index:190;display:grid;place-items:center;padding:20px;background:rgba(3,7,18,.62);backdrop-filter:blur(10px)}.profile-edit-modal{position:relative;width:min(860px,calc(100vw - 32px));max-height:86vh;overflow:auto;padding:26px;border:1px solid rgba(125,211,252,.18);border-radius:28px;background:linear-gradient(135deg,rgba(20,30,50,.94),rgba(8,13,25,.9));box-shadow:0 30px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.08);color:#e0e8f0}.profile-edit-close{position:absolute;right:14px;top:14px;border:0;background:transparent;color:#a0b4c4;cursor:pointer}.profile-edit-modal header{display:grid;grid-template-columns:48px minmax(0,1fr);gap:14px;padding-right:34px}.profile-edit-modal header>span{display:grid;width:48px;height:48px;place-items:center;border-radius:16px;background:rgba(125,211,252,.14);color:#7dd3fc}.profile-edit-modal h2{margin:0;color:#fff;font-size:24px}.profile-edit-modal p{margin:8px 0 0;color:#a9bac8;line-height:1.55}.profile-current-data{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.profile-current-data div{min-width:0;border:1px solid rgba(125,211,252,.14);border-radius:16px;background:rgba(255,255,255,.045);padding:12px}.profile-current-data dt,.profile-edit-form span{color:#a0b4c4;font-size:11px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.profile-current-data dd{margin:4px 0 0;color:#fff;font-weight:800;overflow-wrap:anywhere}.profile-edit-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.profile-edit-form label{display:grid;gap:8px}.profile-edit-form .full{grid-column:1/-1}.profile-edit-form input,.profile-edit-form textarea{width:100%;border:1px solid rgba(125,211,252,.18);border-radius:14px;background:rgba(15,23,42,.72);color:#e0e8f0;outline:0;padding:12px 14px}.profile-edit-form input:focus,.profile-edit-form textarea:focus{border-color:rgba(125,211,252,.55);box-shadow:0 0 0 3px rgba(125,211,252,.12)}.profile-edit-form footer{grid-column:1/-1;display:flex;justify-content:flex-end;gap:10px;margin-top:8px;padding-top:16px;border-top:1px solid rgba(125,211,252,.14)}.profile-edit-form button{border:1px solid rgba(125,211,252,.3);border-radius:14px;background:linear-gradient(135deg,#7dd3fc,#67bde8);color:#082033;padding:12px 16px;font-weight:900;cursor:pointer}.profile-edit-form .ghost{background:rgba(255,255,255,.04);color:#a9bac8}@media(max-width:767px){.profile-edit-backdrop{align-items:end;padding:12px 12px calc(92px + env(safe-area-inset-bottom))}.profile-edit-modal{width:100%;max-height:calc(100dvh - 116px);padding:22px;border-radius:24px}.profile-current-data,.profile-edit-form{grid-template-columns:1fr}.profile-edit-form footer{display:grid;grid-template-columns:1fr}.profile-edit-form button{width:100%}}
 </style>

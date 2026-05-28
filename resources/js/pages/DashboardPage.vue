@@ -54,7 +54,7 @@ const runAction = (action) => {
     }
 
     if (label === 'Soporte') {
-        openSupportModal({ reference: 'Panel principal', reason: 'Consulta general del portal B2B' });
+        openSupportModal({ reference: 'Panel principal', reason: 'Consulta general del portal B2B', whatsappMessage: 'Hola, necesito soporte con el Portal B2B de Inversiones S&M.' });
         return;
     }
 

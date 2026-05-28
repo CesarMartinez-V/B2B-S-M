@@ -1,7 +1,15 @@
 <script setup>
+import { onBeforeUnmount, onMounted } from 'vue';
 import { useConfirm } from '../../composables/useConfirm.js';
 
 const { confirmState, closeConfirm, confirm } = useConfirm();
+
+const handleKeydown = (event) => {
+    if (event.key === 'Escape' && confirmState.open) closeConfirm();
+};
+
+onMounted(() => window.addEventListener('keydown', handleKeydown));
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
 </script>
 
 <template>
@@ -21,5 +29,5 @@ const { confirmState, closeConfirm, confirm } = useConfirm();
 </template>
 
 <style scoped>
-.confirm-backdrop{position:fixed;inset:0;z-index:195;display:grid;place-items:center;padding:20px;background:rgba(3,7,18,.62);backdrop-filter:blur(10px)}.confirm-card{width:min(420px,100%);padding:26px;border:1px solid var(--portal-glass-border);border-radius:24px;background:var(--portal-glass-bg);box-shadow:var(--portal-shadow-glass);color:var(--portal-text);animation:confirm-in .22s ease both}.confirm-card>span{display:grid;width:44px;height:44px;place-items:center;margin-bottom:14px;border-radius:16px;background:color-mix(in srgb,var(--portal-primary) 14%,transparent);color:var(--portal-primary)}.confirm-card h2{margin:0;color:var(--portal-text-strong);font-size:22px}.confirm-card p{margin:10px 0 0;color:var(--portal-text-muted);line-height:1.55}.confirm-card footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.confirm-card button{padding:11px 16px;border-radius:14px;font-weight:900;cursor:pointer}.confirm-card .ghost{border:1px solid var(--portal-glass-border);background:var(--portal-input-bg);color:var(--portal-text-muted)}.confirm-card .primary{border:1px solid var(--portal-glass-border-strong);background:color-mix(in srgb,var(--portal-primary) 14%,transparent);color:var(--portal-primary)}.confirm-card .danger{border:1px solid color-mix(in srgb,var(--portal-error) 34%,transparent);background:color-mix(in srgb,var(--portal-error) 13%,transparent);color:var(--portal-error)}@keyframes confirm-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.confirm-backdrop{position:fixed;inset:0;z-index:195;display:grid;place-items:center;padding:20px;background:rgba(3,7,18,.62);backdrop-filter:blur(10px)}.confirm-card{width:min(440px,100%);max-height:86vh;overflow:auto;padding:26px;border:1px solid var(--portal-glass-border);border-radius:24px;background:linear-gradient(135deg,rgba(20,30,50,.94),rgba(8,13,25,.9));box-shadow:var(--portal-shadow-glass);color:var(--portal-text);animation:confirm-in .22s ease both}.confirm-card>span{display:grid;width:44px;height:44px;place-items:center;margin-bottom:14px;border-radius:16px;background:color-mix(in srgb,var(--portal-primary) 14%,transparent);color:var(--portal-primary)}.confirm-card h2{margin:0;color:var(--portal-text-strong);font-size:22px}.confirm-card p{margin:10px 0 0;color:var(--portal-text-muted);line-height:1.55;white-space:pre-line}.confirm-card footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.confirm-card button{padding:11px 16px;border-radius:14px;font-weight:900;cursor:pointer}.confirm-card .ghost{border:1px solid var(--portal-glass-border);background:var(--portal-input-bg);color:var(--portal-text-muted)}.confirm-card .primary{border:1px solid var(--portal-glass-border-strong);background:color-mix(in srgb,var(--portal-primary) 14%,transparent);color:var(--portal-primary)}.confirm-card .danger{border:1px solid color-mix(in srgb,var(--portal-error) 34%,transparent);background:color-mix(in srgb,var(--portal-error) 13%,transparent);color:var(--portal-error)}@keyframes confirm-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}@media(max-width:767px){.confirm-backdrop{align-items:end;padding:12px 12px calc(92px + env(safe-area-inset-bottom))}.confirm-card{border-radius:24px;width:100%;max-height:calc(100dvh - 116px)}.confirm-card footer{display:grid;grid-template-columns:1fr}.confirm-card button{width:100%}}
 </style>

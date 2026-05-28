@@ -4,6 +4,7 @@ import AppShell from '../components/portal/AppShell.vue';
 import PaginationControl from '../components/ui/PaginationControl.vue';
 import { catalogService } from '../services/catalogService.js';
 import { navigateTo } from '../composables/usePortalNavigation.js';
+import { useModal } from '../composables/useModal.js';
 import { useToast } from '../composables/useToast.js';
 import { useQuoteCartStore } from '../quoteCartStore.js';
 
@@ -22,6 +23,7 @@ const priceValues = computed(() => allProducts.map((product) => Number(product.p
 const minPrice = computed(() => Math.floor(Number(catalogState.filters.min_price) || Math.min(...priceValues.value, 0)));
 const maxPriceLimit = computed(() => Math.ceil(Number(catalogState.filters.max_price) || Math.max(...priceValues.value, 10000)));
 const { success, info } = useToast();
+const { openModal } = useModal();
 const quoteCart = useQuoteCartStore();
 const quoteItems = quoteCart.items;
 const quoteCount = quoteCart.count;
@@ -144,12 +146,31 @@ const setMobileCategory = (category) => {
 
 const addToQuote = (product) => {
     if (!quoteCart.addProduct(product)) {
-        info(`${product.name} requiere confirmar disponibilidad antes de cotizar.`, 'Consultar disponibilidad');
+        openAvailabilityModal(product);
         return;
     }
 
     success(`${product.name} fue agregado a la cotización temporal.`, 'Producto agregado');
 };
+
+const openAvailabilityModal = (product) => openModal({
+    title: 'Consultar disponibilidad',
+    message: `${product.name} no tiene disponibilidad confirmada para cotización automática.`,
+    icon: 'inventory_2',
+    confirmText: 'Preparar consulta',
+    cancelText: 'Cerrar',
+    size: 'md',
+    detail: {
+        rows: [
+            { label: 'SKU', value: product.sku || product.id || 'Sin SKU' },
+            { label: 'Marca', value: product.brand || 'Sin marca' },
+            { label: 'Categoría', value: product.category || 'General' },
+            { label: 'Estado', value: availabilityLabel(product) },
+        ],
+        observations: 'Esta acción no reserva inventario ni crea documento real. Falta habilitar un flujo aprobado para enviar consultas de disponibilidad a Fastevo o al vendedor.',
+    },
+    onConfirm: () => info('Consulta preparada localmente. Contacte a su asesor para confirmar disponibilidad.', 'Disponibilidad pendiente'),
+});
 
 const goToQuotes = () => {
     navigateTo('/cotizaciones/nueva');
@@ -199,9 +220,9 @@ const goToPage = async (page) => {
                         <button class="apply-filter" type="button" @click="applyFilters">Aplicar Filtros</button>
                     </aside>
                     <section class="products-area"><header><div><h2>Catálogo de Alta Ingeniería</h2><p v-if="catalogState.loading">Cargando catálogo ERP...</p><p v-else-if="catalogState.error">Mostrando fallback local por error de conexión ERP.</p><p v-else>Mostrando {{ displayStart }}-{{ displayEnd }} de {{ totalProducts.toLocaleString('en-US') }} productos</p></div><label class="catalog-search"><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Buscar producto, marca o ID..." type="search" @keyup.enter="applyFilters"></label><div class="view-toggle"><button :class="{ active: viewMode === 'grid' }" type="button" @click="viewMode = 'grid'"><span class="material-symbols-outlined">grid_view</span></button><button :class="{ active: viewMode === 'list' }" type="button" @click="viewMode = 'list'"><span class="material-symbols-outlined">list</span></button></div></header><div v-if="viewMode === 'list'" :class="['product-list','glass-card',{ 'is-changing': isPageChanging }]">
-                        <table><thead><tr><th>Producto</th><th>Marca</th><th>Categoría</th><th>Disponibilidad</th><th>Acción</th></tr></thead><tbody><tr v-for="product in paginatedProducts" :key="product.id"><td><strong>{{ product.name }}</strong><small>SKU: {{ product.sku || product.id }}</small></td><td>{{ product.brand }}</td><td>{{ product.category }}</td><td><span :class="['availability-badge', availabilityClass(product)]">{{ availabilityLabel(product) }}</span></td><td><button type="button" :disabled="!product.isAvailable" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</button></td></tr><tr v-if="paginatedProducts.length === 0"><td colspan="5" class="empty-results"><span class="material-symbols-outlined">inventory_2</span>No hay productos para los filtros seleccionados.</td></tr></tbody></table>
+                        <table><thead><tr><th>Producto</th><th>Marca</th><th>Categoría</th><th>Disponibilidad</th><th>Acción</th></tr></thead><tbody><tr v-for="product in paginatedProducts" :key="product.id"><td><strong>{{ product.name }}</strong><small>SKU: {{ product.sku || product.id }}</small></td><td>{{ product.brand }}</td><td>{{ product.category }}</td><td><span :class="['availability-badge', availabilityClass(product)]">{{ availabilityLabel(product) }}</span></td><td><button type="button" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</button></td></tr><tr v-if="paginatedProducts.length === 0"><td colspan="5" class="empty-results"><span class="material-symbols-outlined">inventory_2</span>No hay productos para los filtros seleccionados.</td></tr></tbody></table>
                     </div><div v-else :class="['product-grid',{ 'is-changing': isPageChanging }]">
-                        <article v-for="product in paginatedProducts" :key="product.id" :class="['product-card','glass-card', product.accent, { unavailable: !product.isAvailable }]"><span v-if="product.tag" class="product-tag">{{ product.tag }}</span><div class="product-image"><img v-if="hasProductImage(product)" :src="product.image" :alt="product.name" @error="markImageError(product)"><div v-else class="product-placeholder"><span class="material-symbols-outlined">inventory_2</span><b>Sin imagen</b></div></div><div class="product-info"><div><span>{{ product.brand }} • {{ product.category }}</span><small>SKU: {{ product.sku || product.id }}</small></div><h3>{{ product.name }}</h3><p :class="['stock-label', availabilityClass(product)]">{{ availabilityLabel(product) }}</p><footer><button type="button" :disabled="!product.isAvailable" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span><b>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</b></button></footer></div></article>
+                        <article v-for="product in paginatedProducts" :key="product.id" :class="['product-card','glass-card', product.accent, { unavailable: !product.isAvailable }]"><span v-if="product.tag" class="product-tag">{{ product.tag }}</span><div class="product-image"><img v-if="hasProductImage(product)" :src="product.image" :alt="product.name" @error="markImageError(product)"><div v-else class="product-placeholder"><span class="material-symbols-outlined">inventory_2</span><b>Sin imagen</b></div></div><div class="product-info"><div><span>{{ product.brand }} • {{ product.category }}</span><small>SKU: {{ product.sku || product.id }}</small></div><h3>{{ product.name }}</h3><p :class="['stock-label', availabilityClass(product)]">{{ availabilityLabel(product) }}</p><footer><button type="button" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span><b>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</b></button></footer></div></article>
                         <p v-if="paginatedProducts.length === 0" class="empty-results"><span class="material-symbols-outlined">inventory_2</span>No hay productos para los filtros seleccionados.</p>
                     </div><nav v-if="pageCount > 1" class="pagination"><button type="button" :disabled="currentPage === 1" @click="goToPage(1)"><span class="material-symbols-outlined">first_page</span></button><button type="button" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)"><span class="material-symbols-outlined">chevron_left</span></button><template v-for="(page, index) in visiblePages" :key="`${page}-${index}`"><span v-if="page === 'ellipsis'" class="pagination-ellipsis">...</span><button v-else :class="{ active: currentPage === page }" type="button" @click="goToPage(page)">{{ page }}</button></template><button type="button" :disabled="currentPage === pageCount" @click="goToPage(currentPage + 1)"><span class="material-symbols-outlined">chevron_right</span></button><button type="button" :disabled="currentPage === pageCount" @click="goToPage(pageCount)"><span class="material-symbols-outlined">last_page</span></button></nav></section>
                 </div>
@@ -214,7 +235,7 @@ const goToPage = async (page) => {
                 <section class="mobile-hero-copy"><h2>Excelencia automotriz</h2><p>Componentes de precisión para vehículos de alto rendimiento. Explora nuestro inventario.</p></section>
                 <label class="mobile-catalog-search glass-panel"><span class="material-symbols-outlined">search</span><input v-model="search" placeholder="Buscar producto..." type="search" @keyup.enter="applyFilters"><button type="button" @click="applyFilters">Aplicar</button></label>
                 <section class="category-scroller"><div :class="{ active: selectedCategories.length === 0 }" @click="setMobileCategory('')"><span>Todas las categorías</span><i></i></div><div :class="{ active: availability === 'available' }" @click="availability = availability === 'available' ? 'all' : 'available'; applyFilters()"><span>Disponibles</span><i></i></div><div v-for="category in categories" :key="category" :class="{ active: selectedCategories.includes(category) }" @click="setMobileCategory(category)"><span>{{ category }}</span><i></i></div></section>
-                <div class="mobile-product-list"><div class="mobile-list-head glass-panel"><span>Producto</span><span>Datos</span><span>Acción</span></div><article v-for="product in paginatedProducts" :key="product.id" class="mobile-product-row glass-panel"><header><div><strong>{{ product.name }}</strong><small>SKU: {{ product.sku || product.id }}</small></div><span :class="['availability-badge', availabilityClass(product)]">{{ availabilityLabel(product) }}</span></header><dl><div><dt>Marca</dt><dd>{{ product.brand }}</dd></div><div><dt>Categoría</dt><dd>{{ product.category }}</dd></div></dl><footer><button type="button" :disabled="!product.isAvailable" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</button></footer></article><p v-if="paginatedProducts.length === 0" class="empty-results">No hay productos para los filtros seleccionados.</p></div>
+                <div class="mobile-product-list"><div class="mobile-list-head glass-panel"><span>Producto</span><span>Datos</span><span>Acción</span></div><article v-for="product in paginatedProducts" :key="product.id" class="mobile-product-row glass-panel"><header><div><strong>{{ product.name }}</strong><small>SKU: {{ product.sku || product.id }}</small></div><span :class="['availability-badge', availabilityClass(product)]">{{ availabilityLabel(product) }}</span></header><dl><div><dt>Marca</dt><dd>{{ product.brand }}</dd></div><div><dt>Categoría</dt><dd>{{ product.category }}</dd></div></dl><footer><button type="button" @click="addToQuote(product)"><span class="material-symbols-outlined">{{ product.isAvailable ? 'add_shopping_cart' : 'help' }}</span>{{ product.isAvailable ? 'Cotizar' : 'Consultar' }}</button></footer></article><p v-if="paginatedProducts.length === 0" class="empty-results">No hay productos para los filtros seleccionados.</p></div>
                 <PaginationControl :current-page="currentPage" :last-page="pageCount" :total="totalProducts" :per-page="Number(catalogState.meta.per_page) || itemsPerPage" :disabled="isPageChanging || catalogState.loading" compact @page-change="goToPage" />
             </main>
             <button v-if="quoteCount === 0" class="mobile-search-fab" type="button" @click="applyFilters"><span class="material-symbols-outlined">search</span></button>

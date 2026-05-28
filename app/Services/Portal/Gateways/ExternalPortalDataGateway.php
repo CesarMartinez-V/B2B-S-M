@@ -155,6 +155,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
 
         try {
             $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
+                ->withOptions(['verify' => (bool) config('portal.fastevo.verify_ssl', true)])
                 ->acceptJson()
                 ->withHeaders($this->portalB2BAuthHeaders())
                 ->get($endpoint, array_filter($query, fn ($value): bool => $value !== null && $value !== ''));
@@ -203,6 +204,7 @@ class ExternalPortalDataGateway implements PortalDataGateway
 
         try {
             $response = Http::timeout((int) config('portal.fastevo.timeout', 15))
+                ->withOptions(['verify' => (bool) config('portal.fastevo.verify_ssl', true)])
                 ->acceptJson()
                 ->withHeaders($this->portalB2BAuthHeaders())
                 ->get($endpoint, array_filter($query, fn ($value): bool => $value !== null && $value !== ''));

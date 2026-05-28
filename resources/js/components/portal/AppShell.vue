@@ -10,8 +10,6 @@ defineProps({
     desktopSearchPlaceholder: { type: String, default: 'Buscar socio, factura o pedido...' },
     showDesktopSearch: { type: Boolean, default: true },
     mobileTitle: { type: String, default: 'Inversiones S&M' },
-    showMobileNotifications: { type: Boolean, default: true },
-    showMobileSettings: { type: Boolean, default: false },
     showMobileAvatar: { type: Boolean, default: true },
     showBottomNav: { type: Boolean, default: true },
     avatarSrc: { type: String, default: portalUser.avatar },
@@ -31,7 +29,7 @@ defineProps({
             </main>
         </section>
         <section class="app-shell-mobile">
-            <MobileTopBar :title="mobileTitle" :show-notifications="showMobileNotifications" :show-settings="showMobileSettings" :show-avatar="showMobileAvatar" :avatar-src="mobileAvatarSrc || avatarSrc" :avatar-href="userHref" />
+            <MobileTopBar :title="mobileTitle" :show-avatar="showMobileAvatar" :avatar-src="mobileAvatarSrc || avatarSrc" :avatar-href="userHref" />
             <slot name="mobile" />
             <PortalBottomNav v-if="showBottomNav" :active-route="activeRoute" />
         </section>

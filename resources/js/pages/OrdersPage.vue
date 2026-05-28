@@ -68,9 +68,44 @@ const orderLines = (order = displayOrder.value) => [
     `Total: ${order.total || 'L. 0.00'}`,
     `Items: ${(order.desktopItems ?? []).map((item) => `${item.qty} x ${item.name}`).join(', ') || 'Sin detalle disponible'}`,
 ];
-const showOrderDetail = (order = displayOrder.value) => openModal({ title: `Detalle del pedido ${order.number || ''}`.trim(), message: orderLines(order).join('\n'), icon: 'local_shipping', confirmText: 'Cerrar' });
-const showMap = () => openModal({ title: 'Ubicación del pedido', message: displayOrder.value.tracking?.latitude && displayOrder.value.tracking?.longitude ? `Coordenadas registradas para ${orderNumber.value}: ${displayOrder.value.tracking.latitude}, ${displayOrder.value.tracking.longitude}.` : 'Ubicación no disponible. Para mostrar mapa real se requiere tracking seguro desde Fastevo.', icon: 'map', confirmText: 'Cerrar' });
-const contactSupport = () => openSupportModal({ title: 'Soporte de pedido', reference: orderNumber.value, reason: 'Seguimiento logístico' });
+const showOrderDetail = (order = displayOrder.value) => openModal({
+    title: `Detalle del pedido ${order.number || ''}`.trim(),
+    message: 'Resumen logístico sincronizado para consulta. No modifica el ERP.',
+    icon: 'local_shipping',
+    confirmText: 'Cerrar',
+    size: 'lg',
+    detail: {
+        badge: order.status || 'Sin estado',
+        rows: [
+            { label: 'Pedido', value: order.number || 'Por confirmar' },
+            { label: 'Estado', value: order.status || 'Sin estado' },
+            { label: 'Estimado', value: order.estimatedDate || 'Por confirmar' },
+            { label: 'Destino', value: order.destination?.name || 'Cliente B2B' },
+            { label: 'Dirección', value: order.destination?.address || 'Por confirmar' },
+            { label: 'Total', value: order.total || 'L. 0.00' },
+        ],
+        itemsTitle: 'Partes del pedido',
+        items: (order.desktopItems ?? []).map((item) => ({ id: item.sku, sku: item.sku, name: item.name, qty: item.qty, priceLabel: item.price })),
+        observations: orderLines(order).join('\n'),
+    },
+});
+const showMap = () => openModal({
+    title: 'Ubicación del pedido',
+    message: displayOrder.value.tracking?.latitude && displayOrder.value.tracking?.longitude ? 'Coordenadas registradas para este pedido.' : 'Ubicación no disponible. Para mostrar mapa real se requiere tracking seguro desde Fastevo.',
+    icon: 'map',
+    confirmText: 'Cerrar',
+    size: 'md',
+    detail: {
+        rows: [
+            { label: 'Pedido', value: orderNumber.value },
+            { label: 'Tracking', value: displayOrder.value.tracking?.number || 'Por confirmar' },
+            { label: 'Latitud', value: displayOrder.value.tracking?.latitude || 'No disponible' },
+            { label: 'Longitud', value: displayOrder.value.tracking?.longitude || 'No disponible' },
+        ],
+        observations: 'No se abre mapa externo ni se exponen rutas internas. Falta integración de tracking seguro para vista geográfica real.',
+    },
+});
+const contactSupport = () => openSupportModal({ title: 'Soporte de pedido', reference: orderNumber.value, reason: 'Seguimiento logístico', whatsappMessage: `Hola, necesito soporte con el pedido ${orderNumber.value} en el Portal B2B.` });
 const exportDocument = (name) => openDocumentUnavailableModal({ title: name, document: `${name} del pedido ${orderNumber.value}` });
 </script>
 

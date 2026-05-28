@@ -15,8 +15,6 @@ const words = PalabrasWeb.portal;
         </label>
 
         <div class="top-actions">
-            <button type="button" :aria-label="words.actions.notifications">⌁</button>
-            <button type="button" :aria-label="words.actions.settings">⚙</button>
             <div class="user-chip" :aria-label="words.user.label">
                 <span>{{ words.user.initials }}</span>
                 <strong>{{ words.user.name }}</strong>
